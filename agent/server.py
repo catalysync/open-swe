@@ -364,7 +364,13 @@ def _get_cached_sandbox_backend(thread_id: str) -> SandboxBackendProtocol:
 
 
 async def get_agent(config: RunnableConfig) -> Pregel:
-    """Get or create an agent with a sandbox for the given thread."""
+    """Get or create an agent — uses claude -p via Max subscription."""
+    from .claude_agent import build_claude_agent
+    return build_claude_agent().with_config(config)
+
+
+async def _get_agent_original(config: RunnableConfig) -> Pregel:
+    """Original Deep Agents implementation (needs API key)."""
     thread_id = config["configurable"].get("thread_id", None)
 
     config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
