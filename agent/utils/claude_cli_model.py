@@ -98,3 +98,8 @@ class ClaudeCLIModel(BaseChatModel):
         if name in ("Glob", "glob"): return inp.get("pattern", str(inp))
         if name == "Agent": return inp.get("description", str(inp))
         return json.dumps(inp)
+
+    def bind_tools(self, tools, **kwargs):
+        # Claude CLI handles tools natively — no binding needed.
+        # Return self so the chain continues working.
+        return self
