@@ -25,11 +25,23 @@ SUPPORTED_MODELS: list[ModelOption] = [
         "efforts": ["low", "medium", "high", "xhigh"],
         "default_effort": "xhigh",
     },
+    {
+        "id": "claude-cli:sonnet",
+        "label": "Claude CLI (Sonnet)",
+        "efforts": ["medium", "high"],
+        "default_effort": "medium",
+    },
+    {
+        "id": "claude-cli:opus",
+        "label": "Claude CLI (Opus)",
+        "efforts": ["medium", "high"],
+        "default_effort": "high",
+    },
 ]
 
 SUPPORTED_MODEL_IDS: frozenset[str] = frozenset(m["id"] for m in SUPPORTED_MODELS)
 
-DEFAULT_MODEL_ID: str = "openai:gpt-5.5"
+DEFAULT_MODEL_ID: str = "claude-cli:sonnet"
 DEFAULT_MODEL_EFFORT: str = "medium"
 
 

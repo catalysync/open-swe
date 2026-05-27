@@ -38,6 +38,11 @@ _ANTHROPIC_EFFORTS: set[AnthropicEffort] = {"low", "medium", "high", "xhigh", "m
 
 
 def make_model(model_id: str, **kwargs: Unpack[ModelKwargs]):
+    if model_id.startswith("claude-cli:"):
+        from .claude_cli_model import ClaudeCLIModel
+        cli_model = model_id.split(":", 1)[1] or "sonnet"
+        return ClaudeCLIModel(model_name=cli_model)
+
     model_kwargs: dict[str, object] = kwargs.copy()
     model_kwargs.setdefault("max_retries", DEFAULT_MAX_RETRIES)
 
