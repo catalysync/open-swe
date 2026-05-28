@@ -18,6 +18,7 @@ class HarnessState(TypedDict):
     # pipeline state (ADR 0005 Pydantic-style contracts, stored as plain dicts
     # so LangGraph checkpoints serialize cleanly)
     task: NotRequired[str]
+    project_root: NotRequired[str]
     plan: NotRequired[str]
     review: NotRequired[dict]
     validation: NotRequired[dict]

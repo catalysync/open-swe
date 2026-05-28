@@ -28,7 +28,10 @@ def build_harness_graph() -> Pregel:
     g.add_node("aggregator", nodes.aggregator_node)
 
     g.add_edge(START, "supervisor")
-    g.add_edge("supervisor", "planner")
+    g.add_conditional_edges(
+        "supervisor", nodes.route_supervisor,
+        {"planner": "planner", "end": END},
+    )
     g.add_edge("planner", "developer")
     g.add_edge("developer", "developer_turn")
     g.add_conditional_edges(

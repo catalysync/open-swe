@@ -14,15 +14,15 @@ from langchain_core.runnables import RunnableConfig
 
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
+from .projects import project_root, resolve_project
 from .state import HarnessState
 from .validator import run_gate
 
 MAX_RETRIES = 3  # ADR 0006/0012: escalate after 3 retries
 
 
-def _project_root(config: RunnableConfig) -> str:
-    cfg = (config or {}).get("configurable", {}) or {}
-    return cfg.get("project_root") or "."
+def _project_root(state: HarnessState, config: RunnableConfig) -> str:
+    return project_root(state, config)
 
 
 def _task_from_messages(state: HarnessState) -> str:
@@ -35,24 +35,41 @@ def _task_from_messages(state: HarnessState) -> str:
 
 
 def supervisor_node(state: HarnessState, config: RunnableConfig) -> dict:
-    """ADR 0005 supervisor — intake: frame/decompose the task, then dispatch."""
+    """ADR 0005 supervisor — triage (question vs build), resolve target repo, dispatch."""
     task = _task_from_messages(state)
+    target = resolve_project(task) or _project_root(state, config)
+
+    verdict = claude_text(
+        "Classify the user's message as exactly one word: QUESTION (they want an "
+        "answer/explanation, no code changes) or BUILD (they want code written or "
+        f"changed). Reply with only the word.\n\nMessage:\n{task}"
+    ).strip().upper()
+
+    if "QUESTION" in verdict and "BUILD" not in verdict:
+        answer = claude_text(
+            f"Answer the user's question about the codebase at {target}. "
+            f"Explore read-only as needed; do NOT edit files.\n\nQuestion:\n{task}"
+        )
+        return {"task": task, "project_root": target, "status": "done",
+                "messages": [AIMessage(content=answer)]}
+
     framing = claude_text(
         "You are the SUPERVISOR of a software-engineering harness. In 2-3 lines, "
-        "restate the task crisply and note the single most important constraint. "
-        f"Do not plan or edit anything.\n\nTask:\n{task}"
+        "restate the build task crisply and note the single most important "
+        f"constraint. Do not plan or edit anything.\n\nTask:\n{task}"
     )
     return {
         "task": task,
+        "project_root": target,
         "status": "planning",
         "retry_count": 0,
-        "messages": [AIMessage(content=f"🧭 **Supervisor**\n\n{framing}")],
+        "messages": [AIMessage(content=f"🧭 **Supervisor** (target: `{target}`)\n\n{framing}")],
     }
 
 
 def planner_node(state: HarnessState, config: RunnableConfig) -> dict:
     task = state.get("task") or _task_from_messages(state)
-    root = _project_root(config)
+    root = _project_root(state, config)
     plan = claude_text(prompts.PLANNER.format(task=task, project_root=root))
     return {
         "task": task,
@@ -65,7 +82,7 @@ def planner_node(state: HarnessState, config: RunnableConfig) -> dict:
 
 def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
     """Launch claude -p for the dev phase. Streaming happens in developer_turn."""
-    root = _project_root(config)
+    root = _project_root(state, config)
     feedback = ""
     review = state.get("review") or {}
     validation = state.get("validation") or {}
@@ -90,7 +107,7 @@ def developer_turn(state: HarnessState) -> dict:
 
 
 def reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
-    root = _project_root(config)
+    root = _project_root(state, config)
     diff = _git_diff(root)
     if not diff.strip():
         review = {"status": "APPROVED", "findings": ["no diff produced"]}
@@ -109,7 +126,7 @@ def reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
 
 
 def validator_node(state: HarnessState, config: RunnableConfig) -> dict:
-    root = _project_root(config)
+    root = _project_root(state, config)
     validation = run_gate(root)
     ok = _val_ok(validation)
     summary = (
@@ -154,6 +171,10 @@ def _git_diff(root: str) -> str:
 
 
 # ---- routers ----
+
+def route_supervisor(state: HarnessState) -> Literal["planner", "end"]:
+    return "end" if state.get("status") == "done" else "planner"
+
 
 def route_developer(state: HarnessState) -> Literal["turn", "reviewer"]:
     return "reviewer" if state.get("dev_done") else "turn"
