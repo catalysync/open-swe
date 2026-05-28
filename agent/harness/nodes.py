@@ -14,15 +14,14 @@ from langchain_core.runnables import RunnableConfig
 
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
-from .projects import load_skills, project_root, recent_memory, resolve_project
+from .projects import load_rules, load_skills, project_root, recent_memory, resolve_project
 from .state import HarnessState
 from .validator import run_gate
 
 MAX_RETRIES = 3  # ADR 0006/0012: escalate after 3 retries
 
 
-def _project_root(state: HarnessState, config: RunnableConfig) -> str:
-    return project_root(state, config)
+_project_root = project_root  # resolution order: state → config → env → workspace
 
 
 def _task_from_messages(state: HarnessState) -> str:
@@ -72,7 +71,10 @@ def planner_node(state: HarnessState, config: RunnableConfig) -> dict:
     root = _project_root(state, config)
     mem = recent_memory(root)
     task_with_mem = task if not mem else f"{task}\n\nRecent successful builds here:\n{mem}"
-    plan = claude_text(prompts.PLANNER.format(task=task_with_mem, project_root=root))
+    rules = load_rules(root)
+    rules_block = f"\nProject house rules:\n{rules}\n" if rules else ""
+    plan = claude_text(prompts.PLANNER.format(
+        task=task_with_mem, project_root=root, rules=rules_block))
     return {
         "task": task,
         "plan": plan,
@@ -95,9 +97,11 @@ def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
         ) + "\n"
     skills = load_skills(root)
     skills_block = f"\nSkill templates to follow EXACTLY:\n{skills}\n" if skills else ""
+    rules = load_rules(root)
+    rules_block = f"\nProject house rules (AGENTS.md/CLAUDE.md):\n{rules}\n" if rules else ""
     prompt = prompts.DEVELOPER.format(
         task=state.get("task", ""), plan=state.get("plan", ""),
-        skills=skills_block, feedback=feedback, project_root=root,
+        rules=rules_block, skills=skills_block, feedback=feedback, project_root=root,
     )
     key = start_dev(prompt)
     return {"proc_key": key, "dev_done": False, "pending_tool_ids": [], "status": "developing"}
@@ -132,7 +136,6 @@ def reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
 def validator_node(state: HarnessState, config: RunnableConfig) -> dict:
     root = _project_root(state, config)
     validation = run_gate(root)
-    ok = _val_ok(validation)
     summary = (
         f"lint={'pass' if validation['lint_passed'] else 'FAIL'} "
         f"tests={'pass' if validation['tests_passed'] else 'FAIL'} "

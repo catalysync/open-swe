@@ -48,6 +48,16 @@ def resolve_project(task: str) -> str | None:
     return None
 
 
+def load_rules(root: str, limit: int = 6000) -> str:
+    """Load the project's house-rules catalog (AGENTS.md + CLAUDE.md) for prompts (idea #4)."""
+    parts: list[str] = []
+    for fname in ("AGENTS.md", "CLAUDE.md"):
+        p = Path(root) / fname
+        if p.is_file():
+            parts.append(f"### {fname}\n{p.read_text()}")
+    return "\n\n".join(parts)[:limit]
+
+
 def load_skills(root: str, limit: int = 8000) -> str:
     """Concatenate the project's .agents/skills/*.md templates for the developer prompt (ADR 0006)."""
     skills_dir = Path(root) / ".agents" / "skills"
