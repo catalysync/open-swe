@@ -24,7 +24,18 @@ Plan from the planner:
 {rules}{skills}{feedback}
 Implement the plan in {project_root}. Read, write, and edit files and run
 commands as needed. Follow the project house rules and skill templates above
-EXACTLY. When done, briefly summarize what you changed."""
+EXACTLY.
+
+Avoid the common AI-codegen pitfalls (any language):
+- PRESERVE existing behaviour — when editing a function, keep every existing
+  call/side-effect (logging, analytics, notifications, balance updates, events)
+  that isn't explicitly part of this change. Add; don't silently drop.
+- Use only REAL, current dependencies — never invent packages or use deprecated
+  modules/outdated APIs. If unsure a library exists, check before importing.
+- Match the project's existing architecture, error-handling, naming and logging
+  conventions — don't introduce a foreign pattern.
+
+When done, briefly summarize what you changed."""
 
 REVIEWER = """You are the REVIEWER in a multi-agent software engineering harness.
 
@@ -57,6 +68,15 @@ numbers/strings hard-coded in logic instead of named constants; (5) deep
 nesting (≳4 levels) signalling a missing abstraction; (6) copy-pasted /
 near-duplicate blocks. Ignore red flags in pre-existing code the diff didn't
 touch.
+
+This code was AI-generated — apply extra vigilance for AI-specific failure
+modes (any language): (a) Missing functionality — scan the diff for removed
+calls/side-effects (logging, analytics, notifications, balance/state updates,
+events) that the change did NOT intend to drop; flag any silent removal. (b)
+Phantom/deprecated dependencies — flag imports/packages that may not exist, are
+deprecated, or use outdated signatures (esp. names with pro/advanced/fast, or
+"too convenient" imports). (c) Architectural fit — does it match the project's
+existing patterns, error-handling, naming and logging, or introduce a foreign one?
 
 Only file a finding when the diff clearly warrants it (no nitpicking). Respond
 with ONLY a JSON object matching this schema (no prose, no fences):
