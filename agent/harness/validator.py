@@ -44,15 +44,15 @@ def _detect_stack(root: Path) -> str:
     return "unknown"
 
 
-# stack -> (lint_cmd, test_cmd) ; None entries are skipped
-_GATES: dict[str, tuple[list[str] | None, list[str] | None]] = {
-    "python": (["ruff", "check", "."], ["pytest", "-q", "--no-header"]),
-    "ruby": (["rubocop"], ["rspec"]),
-    "go": (["go", "vet", "./..."], ["go", "test", "./..."]),
-    "rust": (["cargo", "clippy", "--quiet"], ["cargo", "test", "--quiet"]),
-    "node": (["npx", "eslint", "."], ["npx", "vitest", "run"]),
-    "nextjs": (["npx", "eslint", "."], ["npx", "vitest", "run"]),
-    "nestjs": (["npx", "eslint", "."], ["npx", "jest"]),
+# stack -> (lint_cmd, test_cmd, security_cmd) ; None entries are skipped (ADR 0003)
+_GATES: dict[str, tuple[list[str] | None, list[str] | None, list[str] | None]] = {
+    "python": (["ruff", "check", "."], ["pytest", "-q", "--no-header"], ["bandit", "-r", ".", "-q"]),
+    "ruby": (["rubocop"], ["rspec"], ["brakeman", "-q", "--no-pager"]),
+    "go": (["go", "vet", "./..."], ["go", "test", "./..."], ["gosec", "./..."]),
+    "rust": (["cargo", "clippy", "--quiet"], ["cargo", "test", "--quiet"], ["cargo", "audit"]),
+    "node": (["npx", "eslint", "."], ["npx", "vitest", "run"], ["npx", "semgrep", "--error", "--config=auto"]),
+    "nextjs": (["npx", "eslint", "."], ["npx", "vitest", "run"], ["npx", "semgrep", "--error", "--config=auto"]),
+    "nestjs": (["npx", "eslint", "."], ["npx", "jest"], ["npx", "semgrep", "--error", "--config=auto"]),
 }
 
 
@@ -76,10 +76,10 @@ def _run_structural(root: Path) -> tuple[bool, list[str]]:
 def run_gate(project_root: str) -> dict:
     root = Path(project_root)
     stack = _detect_stack(root)
-    lint_cmd, test_cmd = _GATES.get(stack, (None, None))
+    lint_cmd, test_cmd, sec_cmd = _GATES.get(stack, (None, None, None))
 
     errors: list[str] = []
-    lint_passed = tests_passed = True
+    lint_passed = tests_passed = security_passed = True
     ran = False
 
     if lint_cmd and shutil.which(lint_cmd[0]):
@@ -94,6 +94,13 @@ def run_gate(project_root: str) -> dict:
         ran = True
         errors.extend(structural_errs)
 
+    if sec_cmd and shutil.which(sec_cmd[0]):
+        ran = True
+        ok, out = _run(sec_cmd, project_root)
+        security_passed = ok
+        if not ok:
+            errors.append(f"security[{sec_cmd[0]}]:\n{out}")
+
     if test_cmd and shutil.which(test_cmd[0]):
         ran = True
         ok, out = _run(test_cmd, project_root)
@@ -105,6 +112,7 @@ def run_gate(project_root: str) -> dict:
         "stack": stack,
         "lint_passed": lint_passed,
         "structural_passed": structural_passed,
+        "security_passed": security_passed,
         "tests_passed": tests_passed,
         "errors": errors,
         "ran": ran,

@@ -163,13 +163,8 @@ def aggregator_node(state: HarnessState) -> dict:
 
 
 def _val_ok(validation: dict) -> bool:
-    if not validation:
-        return True
-    return (
-        validation.get("lint_passed", True)
-        and validation.get("structural_passed", True)
-        and validation.get("tests_passed", True)
-    )
+    keys = ("lint_passed", "structural_passed", "security_passed", "tests_passed")
+    return all(validation.get(k, True) for k in keys)
 
 
 def _git_diff(root: str) -> str:
