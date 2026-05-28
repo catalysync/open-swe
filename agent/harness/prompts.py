@@ -30,6 +30,9 @@ Avoid the common AI-codegen pitfalls (any language):
 - PRESERVE existing behaviour — when editing a function, keep every existing
   call/side-effect (logging, analytics, notifications, balance updates, events)
   that isn't explicitly part of this change. Add; don't silently drop.
+- Prefer MINIMAL, incremental edits — change only what the task needs; do NOT
+  rewrite whole functions/files (wholesale rewrites are how existing behaviour
+  gets silently lost).
 - Use only REAL, current dependencies — never invent packages or use deprecated
   modules/outdated APIs. If unsure a library exists, check before importing.
 - Match the project's existing architecture, error-handling, naming and logging
@@ -90,12 +93,18 @@ deprecated, or use outdated signatures (esp. names with pro/advanced/fast, or
 existing patterns, error-handling, naming and logging, or introduce a foreign
 one? (d) Over-engineering (YAGNI) — needless abstractions/patterns/config built
 for hypothetical future needs; would simpler code do the same? (e) Test theater
-— tests that mock everything and verify nothing, only happy paths, or assert
-implementation details instead of behaviour; failure/edge cases and real
-integration points must be covered.
+— tests that verify nothing, only happy paths, or assert implementation details
+instead of behaviour; mocking is acceptable ONLY for true external systems
+(third-party APIs) — the database and internal logic must be exercised for real;
+failure/edge cases and integration points must be covered.
 
-Only file a finding when the diff clearly warrants it (no nitpicking). Respond
-with ONLY a JSON object matching this schema (no prose, no fences):
+PRECISION OVER RECALL — avoid false positives. The dimensions above are a LENS,
+not a checklist to fill. Default to APPROVED. File a finding ONLY when you are
+highly confident it is a real, material problem caused by THIS diff — not
+pre-existing code the diff didn't touch, not a style preference, not a
+hypothetical. When uncertain, APPROVE. Do NOT invent findings to seem thorough;
+zero findings is the correct, common outcome for good code. Respond with ONLY a
+JSON object matching this schema (no prose, no fences):
 
 {{"status": "APPROVED" | "NEEDS_REVISION", "findings": ["<dimension>: <finding>", ...]}}
 
