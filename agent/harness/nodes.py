@@ -13,7 +13,6 @@ from langchain_core.runnables import RunnableConfig
 
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
-from .contracts import ReviewResult, parse_or_repair
 from .projects import (
     load_manifest, load_rules, load_skills, project_root, recent_memory, resolve_project,
 )
@@ -118,23 +117,6 @@ def developer_turn(state: HarnessState) -> dict:
     return {"messages": msgs, "dev_done": done, "pending_tool_ids": new_pending}
 
 
-def reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
-    root = _project_root(state, config)
-    diff = _git_diff(root)
-    if not diff.strip():
-        review = {"status": "APPROVED", "findings": ["no diff produced"]}
-        return {"review": review, "status": "validating",
-                "messages": [AIMessage(content="🔍 **Review**: APPROVED (no changes)")]}
-    raw = claude_text(prompts.REVIEWER.format(task=state.get("task", ""), diff=diff[:12000]))
-    result = parse_or_repair(
-        raw, ReviewResult,
-        default=ReviewResult(status="APPROVED", findings=["reviewer output unparseable"]),
-    )
-    body = "\n".join(f"- {f}" for f in result.findings) or "- none"
-    return {"review": result.model_dump(), "status": "validating",
-            "messages": [AIMessage(content=f"🔍 **Review**: {result.status}\n{body}")]}
-
-
 def validator_node(state: HarnessState, config: RunnableConfig) -> dict:
     root = _project_root(state, config)
     validation = run_gate(root)
@@ -171,14 +153,5 @@ def aggregator_node(state: HarnessState) -> dict:
 def _val_ok(validation: dict) -> bool:
     keys = ("lint_passed", "structural_passed", "security_passed", "tests_passed")
     return all(validation.get(k, True) for k in keys)
-
-
-def _git_diff(root: str) -> str:
-    try:
-        r = subprocess.run(["git", "diff", "HEAD"], cwd=root,
-                           capture_output=True, text=True, timeout=30)
-        return r.stdout
-    except Exception:  # noqa: BLE001
-        return ""
 
 

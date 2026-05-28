@@ -20,6 +20,8 @@ class HarnessState(TypedDict):
     task: NotRequired[str]
     project_root: NotRequired[str]
     plan: NotRequired[str]
+    review_quality: NotRequired[dict]
+    review_security: NotRequired[dict]
     review: NotRequired[dict]
     validation: NotRequired[dict]
     retry_count: NotRequired[int]

@@ -14,7 +14,7 @@ from typing import Literal
 from langgraph.graph import END, START, StateGraph
 from langgraph.pregel import Pregel
 
-from . import curator, nodes
+from . import curator, nodes, reviewers
 from .state import HarnessState
 
 
@@ -22,8 +22,12 @@ def route_supervisor(state: HarnessState) -> Literal["planner", "end"]:
     return "end" if state.get("status") == "done" else "planner"
 
 
-def route_developer(state: HarnessState) -> Literal["turn", "reviewer"]:
-    return "reviewer" if state.get("dev_done") else "turn"
+def route_developer(state: HarnessState) -> Literal["turn", "review"]:
+    return "review" if state.get("dev_done") else "turn"
+
+
+def _reviews_entry(state: HarnessState) -> dict:
+    return {}  # fan-out point: static edges dispatch to both reviewers in parallel
 
 
 def route_aggregator(state: HarnessState) -> Literal["developer", "curator", "end"]:
@@ -42,7 +46,10 @@ def build_harness_graph(hitl: bool = True) -> Pregel:
     g.add_node("planner", nodes.planner_node)
     g.add_node("developer", nodes.developer_node)
     g.add_node("developer_turn", nodes.developer_turn)
-    g.add_node("reviewer", nodes.reviewer_node)
+    g.add_node("reviews", _reviews_entry)
+    g.add_node("quality_reviewer", reviewers.quality_reviewer_node)
+    g.add_node("security_reviewer", reviewers.security_reviewer_node)
+    g.add_node("review_merge", reviewers.review_merge_node)
     g.add_node("validator", nodes.validator_node)
     g.add_node("aggregator", nodes.aggregator_node)
     g.add_node("curator", curator.curator_propose)
@@ -57,9 +64,13 @@ def build_harness_graph(hitl: bool = True) -> Pregel:
     g.add_edge("developer", "developer_turn")
     g.add_conditional_edges(
         "developer_turn", route_developer,
-        {"turn": "developer_turn", "reviewer": "reviewer"},
+        {"turn": "developer_turn", "review": "reviews"},
     )
-    g.add_edge("reviewer", "validator")
+    g.add_edge("reviews", "quality_reviewer")
+    g.add_edge("reviews", "security_reviewer")
+    g.add_edge("quality_reviewer", "review_merge")
+    g.add_edge("security_reviewer", "review_merge")
+    g.add_edge("review_merge", "validator")
     g.add_edge("validator", "aggregator")
     g.add_conditional_edges(
         "aggregator", route_aggregator,
