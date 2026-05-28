@@ -14,12 +14,12 @@ toolchains are skipped, not failed, so the gate never blocks on an absent tool.
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 from pathlib import Path
 
 from .gates import resolve_project_gates
+from .stack_defaults import FIXERS, GATES, TYPES, detect_stack
 
 
 def _run(cmd: list[str], cwd: str, timeout: int = 300) -> tuple[bool, str]:
@@ -30,67 +30,10 @@ def _run(cmd: list[str], cwd: str, timeout: int = 300) -> tuple[bool, str]:
         return False, str(exc)
 
 
-def _detect_stack(root: Path) -> str:
-    if (root / "Gemfile").exists():
-        return "ruby"
-    if (root / "go.mod").exists():
-        return "go"
-    if (root / "Cargo.toml").exists():
-        return "rust"
-    if (root / "package.json").exists():
-        try:
-            pkg = json.loads((root / "package.json").read_text())
-            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-        except Exception:  # noqa: BLE001
-            deps = {}
-        if "next" in deps:
-            return "nextjs"
-        if any(d.startswith("@nestjs") for d in deps):
-            return "nestjs"
-        return "node"
-    if (root / "pyproject.toml").exists() or any(root.glob("*.py")):
-        return "python"
-    return "unknown"
-
-
-# stack -> (lint_cmd, test_cmd, security_cmd) ; None entries are skipped (ADR 0003)
-_GATES: dict[str, tuple[list[str] | None, list[str] | None, list[str] | None]] = {
-    "python": (["ruff", "check", "."], ["pytest", "-q", "--no-header"], ["bandit", "-r", ".", "-q"]),
-    "ruby": (["rubocop"], ["rspec"], ["brakeman", "-q", "--no-pager"]),
-    "go": (["go", "vet", "./..."], ["go", "test", "-race", "./..."], ["gosec", "./..."]),
-    "rust": (["cargo", "clippy", "--quiet"], ["cargo", "test", "--quiet"], ["cargo", "audit"]),
-    "node": (["npx", "eslint", "."], ["npx", "vitest", "run"], ["npx", "semgrep", "--error", "--config=auto"]),
-    "nextjs": (["npx", "eslint", "."], ["npx", "vitest", "run"], ["npx", "semgrep", "--error", "--config=auto"]),
-    "nestjs": (["npx", "eslint", "."], ["npx", "jest"], ["npx", "semgrep", "--error", "--config=auto"]),
-}
-
-# stack -> type-check command (ADR 0003 Layer 1 "Types"). Skipped if tool absent;
-# go/rust type-check via their compilers (vet/clippy already cover that surface).
-_TYPES: dict[str, list[str]] = {
-    "python": ["mypy", "."],
-    "ruby": ["srb", "tc"],
-    "node": ["npx", "tsc", "--noEmit"],
-    "nextjs": ["npx", "tsc", "--noEmit"],
-    "nestjs": ["npx", "tsc", "--noEmit"],
-}
-
-# stack -> autofix commands run BEFORE the lint gate (Stripe Minions autofix).
-# Best-effort: failures are ignored, they only resolve mechanically-fixable issues.
-_FIXERS: dict[str, list[list[str]]] = {
-    "python": [["ruff", "check", "--fix", "."], ["ruff", "format", "."]],
-    "ruby": [["rubocop", "-A"]],
-    "go": [["gofmt", "-w", "."]],
-    "rust": [["cargo", "clippy", "--fix", "--allow-dirty", "--allow-no-vcs"]],
-    "node": [["npx", "eslint", ".", "--fix"]],
-    "nextjs": [["npx", "eslint", ".", "--fix"]],
-    "nestjs": [["npx", "eslint", ".", "--fix"]],
-}
-
-
 def _autofix(stack: str, root: str) -> bool:
     """Apply mechanical fixes in-place; returns True if any fixer ran."""
     ran = False
-    for cmd in _FIXERS.get(stack, []):
+    for cmd in FIXERS.get(stack, []):
         if shutil.which(cmd[0]):
             ran = True
             _run(cmd, root)
@@ -155,7 +98,7 @@ def _run_declared(
 
 def run_gate(project_root: str) -> dict:
     root = Path(project_root)
-    stack = _detect_stack(root)
+    stack = detect_stack(root)
 
     # tier 1/2: the project's declared or conventional standard tool-set wins.
     autofixed = _autofix(stack, project_root)
@@ -167,7 +110,7 @@ def run_gate(project_root: str) -> dict:
             return declared
 
     # tier 3: per-stack defaults (fallback for bare repos).
-    lint_cmd, test_cmd, sec_cmd = _GATES.get(stack, (None, None, None))
+    lint_cmd, test_cmd, sec_cmd = GATES.get(stack, (None, None, None))
 
     errors: list[str] = []
     lint_passed = types_passed = tests_passed = security_passed = True
@@ -180,7 +123,7 @@ def run_gate(project_root: str) -> dict:
         if not ok:
             errors.append(f"{lint_cmd[0]}:\n{out}")
 
-    type_cmd = _TYPES.get(stack)
+    type_cmd = TYPES.get(stack)
     if type_cmd and shutil.which(type_cmd[0]):
         ran = True
         ok, out = _run(type_cmd, project_root)
