@@ -370,6 +370,13 @@ async def get_agent(config: RunnableConfig) -> Pregel:
     return build_harness_graph().with_config(config)
 
 
+async def get_mine(config: RunnableConfig) -> Pregel:
+    """Replication harness — mine a reference (video/images/docs) into a project."""
+    from .harness.mine import build_mine_graph
+    config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
+    return build_mine_graph().with_config(config)
+
+
 async def _get_agent_original(config: RunnableConfig) -> Pregel:
     """Original Deep Agents implementation (needs API key)."""
     thread_id = config["configurable"].get("thread_id", None)
