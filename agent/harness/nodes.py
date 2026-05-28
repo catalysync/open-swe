@@ -16,6 +16,7 @@ from .claude import claude_text, read_dev_turn, start_dev
 from .projects import (
     load_manifest, load_rules, load_skills, project_root, recent_memory, resolve_project,
 )
+from .retrieve import pre_hydrate
 from .state import HarnessState
 from .validator import run_gate
 
@@ -74,8 +75,10 @@ def planner_node(state: HarnessState, config: RunnableConfig) -> dict:
     task_with_mem = task if not mem else f"{task}\n\nRecent successful builds here:\n{mem}"
     rules = load_rules(root)
     rules_block = f"\nProject house rules:\n{rules}\n" if rules else ""
+    hits = pre_hydrate(root, task)
+    context_block = f"\nLikely-relevant existing files (pre-hydrated):\n{hits}\n" if hits else ""
     plan = claude_text(prompts.PLANNER.format(
-        task=task_with_mem, project_root=root, rules=rules_block))
+        task=task_with_mem, project_root=root, rules=rules_block, context=context_block))
     return {
         "task": task,
         "plan": plan,
@@ -102,9 +105,12 @@ def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
     rules_block = f"\nProject house rules (AGENTS.md/CLAUDE.md):\n{rules}\n" if rules else ""
     manifest = load_manifest(root)
     manifest_block = f"  Manifest — prefer these deps:\n  {manifest}\n" if manifest else ""
+    hits = pre_hydrate(root, state.get("task", ""))
+    context_block = f"\nLikely-relevant existing files (pre-hydrated):\n{hits}\n" if hits else ""
     prompt = prompts.DEVELOPER.format(
         task=state.get("task", ""), plan=state.get("plan", ""), manifest=manifest_block,
-        rules=rules_block, skills=skills_block, feedback=feedback, project_root=root,
+        rules=rules_block, skills=skills_block, context=context_block,
+        feedback=feedback, project_root=root,
     )
     key = start_dev(prompt)
     return {"proc_key": key, "dev_done": False, "pending_tool_ids": [], "status": "developing"}

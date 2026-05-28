@@ -8,7 +8,7 @@ Task:
 {task}
 
 Project root: {project_root}
-{rules}
+{rules}{context}
 Explore the codebase as needed (read-only — DO NOT edit any files). Produce a
 concise implementation plan: the approach, the files to create/modify, and the
 order. Honour the project house rules above. Keep it under 200 words. Output
@@ -21,7 +21,7 @@ Task:
 
 Plan from the planner:
 {plan}
-{rules}{skills}{feedback}
+{rules}{skills}{context}{feedback}
 Implement the plan in {project_root}. Read, write, and edit files and run
 commands as needed. Follow the project house rules and skill templates above
 EXACTLY.

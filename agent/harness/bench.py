@@ -20,6 +20,7 @@ from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 
+from . import cost
 from .graph import build_harness_graph
 
 _OUT = Path(tempfile.gettempdir()) / "harness-bench"
@@ -68,6 +69,7 @@ def _score(state: dict) -> int:
 def _run_one(name: str, files: dict[str, str], task: str) -> dict:
     root = _seed_repo(files)
     graph = build_harness_graph(hitl=False)
+    cost.reset()
     t0 = time.monotonic()
     try:
         final = graph.invoke(
@@ -75,9 +77,10 @@ def _run_one(name: str, files: dict[str, str], task: str) -> dict:
             config={"configurable": {"project_root": root}, "recursion_limit": 9999},
         )
     except Exception as exc:  # noqa: BLE001
-        return {"task": name, "error": str(exc)[:300], "score": 0}
+        return {"task": name, "error": str(exc)[:300], "score": 0, **cost.snapshot()}
     v = final.get("validation") or {}
     review = final.get("review") or {}
+    c = cost.snapshot()
     return {
         "task": name,
         "status": final.get("status"),
@@ -89,6 +92,8 @@ def _run_one(name: str, files: dict[str, str], task: str) -> dict:
         "tests": v.get("tests_passed"),
         "wall_s": round(time.monotonic() - t0, 1),
         "score": _score(final),
+        "usd": c["usd"],
+        "tokens": c["input_tokens"] + c["output_tokens"],
     }
 
 
@@ -98,10 +103,12 @@ def run(tag: str) -> None:
     path = _OUT / f"{tag}.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in rows))
     avg = sum(r["score"] for r in rows) / len(rows)
-    print(f"tag={tag}  avg_score={avg:.1f}  → {path}")
+    total_usd = sum(r.get("usd", 0) for r in rows)
+    print(f"tag={tag}  avg_score={avg:.1f}  total=${total_usd:.3f}  → {path}")
     for r in rows:
         print(f"  {r['task']:14} score={r['score']:3}  status={r.get('status')}  "
-              f"retries={r.get('retries')}  {r.get('wall_s')}s")
+              f"retries={r.get('retries')}  {r.get('wall_s')}s  "
+              f"${r.get('usd', 0):.3f}  {r.get('tokens', 0)}tok")
 
 
 def _load(tag: str) -> dict[str, dict]:

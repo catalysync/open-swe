@@ -18,6 +18,8 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
 
+from . import cost
+
 _PROCS: dict[str, subprocess.Popen] = {}
 _PENDING_EVENTS: dict[str, dict] = {}
 
@@ -25,13 +27,22 @@ _DIM, _RST, _YLW = "\033[2m", "\033[0m", "\033[33m"
 
 
 def claude_text(prompt: str, *, model: str = "sonnet", timeout: int = 600) -> str:
-    """Run claude -p and return its final text. Reasoning-only (no tool loop owned by us)."""
+    """Run claude -p and return its final text. Reasoning-only (no tool loop owned by us).
+
+    Uses json output so we can record token usage + cost (ADR cost telemetry).
+    """
     proc = subprocess.run(
         ["claude", "-p", prompt, "--model", model,
-         "--output-format", "text", "--dangerously-skip-permissions"],
+         "--output-format", "json", "--dangerously-skip-permissions"],
         capture_output=True, text=True, timeout=timeout,
     )
-    return (proc.stdout or "").strip() or (proc.stderr or "").strip()
+    raw = (proc.stdout or "").strip()
+    try:
+        obj = json.loads(raw)
+        cost.add(obj.get("usage"), obj.get("total_cost_usd"))
+        return (obj.get("result") or "").strip() or raw
+    except json.JSONDecodeError:
+        return raw or (proc.stderr or "").strip()
 
 
 def start_dev(prompt: str, *, model: str = "sonnet") -> str:
@@ -110,6 +121,7 @@ def read_dev_turn(key: str, pending_tool_ids: list[str]) -> tuple[list[Any], boo
                 if t:
                     text_parts.append(t)
         elif etype == "result":
+            cost.add(event.get("usage"), event.get("total_cost_usd"))
             rt = event.get("result", "")
             if rt and not text_parts:
                 text_parts.append(rt)

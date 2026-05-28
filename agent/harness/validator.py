@@ -55,6 +55,28 @@ _GATES: dict[str, tuple[list[str] | None, list[str] | None, list[str] | None]] =
     "nestjs": (["npx", "eslint", "."], ["npx", "jest"], ["npx", "semgrep", "--error", "--config=auto"]),
 }
 
+# stack -> autofix commands run BEFORE the lint gate (Stripe Minions autofix).
+# Best-effort: failures are ignored, they only resolve mechanically-fixable issues.
+_FIXERS: dict[str, list[list[str]]] = {
+    "python": [["ruff", "check", "--fix", "."], ["ruff", "format", "."]],
+    "ruby": [["rubocop", "-A"]],
+    "go": [["gofmt", "-w", "."]],
+    "rust": [["cargo", "clippy", "--fix", "--allow-dirty", "--allow-no-vcs"]],
+    "node": [["npx", "eslint", ".", "--fix"]],
+    "nextjs": [["npx", "eslint", ".", "--fix"]],
+    "nestjs": [["npx", "eslint", ".", "--fix"]],
+}
+
+
+def _autofix(stack: str, root: str) -> bool:
+    """Apply mechanical fixes in-place; returns True if any fixer ran."""
+    ran = False
+    for cmd in _FIXERS.get(stack, []):
+        if shutil.which(cmd[0]):
+            ran = True
+            _run(cmd, root)
+    return ran
+
 
 def _run_structural(root: Path) -> tuple[bool, list[str]]:
     """ADR 0006: run the project's .agents/validators/*.py AST/structural checks.
@@ -81,6 +103,8 @@ def run_gate(project_root: str) -> dict:
     errors: list[str] = []
     lint_passed = tests_passed = security_passed = True
     ran = False
+
+    autofixed = _autofix(stack, project_root)
 
     if lint_cmd and shutil.which(lint_cmd[0]):
         ran = True
@@ -110,6 +134,7 @@ def run_gate(project_root: str) -> dict:
 
     return {
         "stack": stack,
+        "autofixed": autofixed,
         "lint_passed": lint_passed,
         "structural_passed": structural_passed,
         "security_passed": security_passed,
