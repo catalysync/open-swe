@@ -20,10 +20,16 @@ from .state import HarnessState
 _SEV = ["none", "low", "medium", "high", "critical"]
 
 
+# Harness scratch / VCS noise that must never count as "the change under review".
+_DIFF_EXCLUDE = (":(exclude).agents/**", ":(exclude)**/*.db", ":(exclude)**/*.jsonl")
+
+
 def _diff(root: str, base: str = "HEAD") -> str:
-    """Whole-run diff vs the base ref — includes work the developer committed."""
+    """Whole-run diff vs the base ref, minus harness scratch (.agents, *.db,
+    *.jsonl) so run logs/checkpoints don't crowd out the real change in the
+    truncated review window."""
     try:
-        r = subprocess.run(["git", "diff", base], cwd=root,
+        r = subprocess.run(["git", "diff", base, "--", ".", *_DIFF_EXCLUDE], cwd=root,
                            capture_output=True, text=True, timeout=30)
         return r.stdout
     except Exception:  # noqa: BLE001

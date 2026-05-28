@@ -14,8 +14,13 @@ from langchain_core.runnables import RunnableConfig
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
 from .projects import (
-    explicit_project_root, load_manifest, load_rules, load_skills,
-    project_root, recent_memory, resolve_project,
+    explicit_project_root,
+    load_manifest,
+    load_rules,
+    load_skills,
+    project_root,
+    recent_memory,
+    resolve_project,
 )
 from .retrieve import pre_hydrate
 from .state import HarnessState
@@ -39,10 +44,13 @@ def _base_ref(root: str) -> str:
 
 
 def _touched(root: str, base: str = "HEAD") -> list[str]:
-    """Files changed vs the run's base ref (committed + uncommitted)."""
+    """Files changed vs the run's base ref, minus harness scratch (.agents)."""
     try:
-        r = subprocess.run(["git", "diff", "--name-only", base], cwd=root,
-                           capture_output=True, text=True, timeout=30)
+        r = subprocess.run(
+            ["git", "diff", "--name-only", base, "--", ".",
+             ":(exclude).agents/**", ":(exclude)**/*.db", ":(exclude)**/*.jsonl"],
+            cwd=root, capture_output=True, text=True, timeout=30,
+        )
         return [ln for ln in r.stdout.splitlines() if ln.strip()]
     except Exception:  # noqa: BLE001
         return []

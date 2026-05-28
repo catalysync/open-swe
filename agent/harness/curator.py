@@ -21,9 +21,12 @@ from .state import HarnessState
 _SENTINEL = "NONE"
 
 
+_DIFF_EXCLUDE = (":(exclude).agents/**", ":(exclude)**/*.db", ":(exclude)**/*.jsonl")
+
+
 def _diff(root: str, base: str = "HEAD") -> str:
     try:
-        r = subprocess.run(["git", "diff", base], cwd=root,
+        r = subprocess.run(["git", "diff", base, "--", ".", *_DIFF_EXCLUDE], cwd=root,
                            capture_output=True, text=True, timeout=30)
         return r.stdout
     except Exception:  # noqa: BLE001
