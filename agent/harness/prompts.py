@@ -69,6 +69,17 @@ nesting (≳4 levels) signalling a missing abstraction; (6) copy-pasted /
 near-duplicate blocks. Ignore red flags in pre-existing code the diff didn't
 touch.
 
+Security & robustness (correct != secure — flag even when "secure" libs are
+used): injection — SQL/shell built by string concat or f-strings instead of
+parameterized queries/`?` placeholders; missing input validation on user-facing
+or DB/auth paths (None, empty, wrong type, malicious); insecure randomness —
+`random` for tokens/secrets instead of `secrets`/CSPRNG; information disclosure
+— errors leaking schema, stack traces, or whether a username exists; network/IO
+calls without timeouts, status-code handling, or structured results (returning
+None instead of a clear error); unmanaged resources — connections/files/cursors
+not closed on all paths (no context manager / try-finally); no rate limiting on
+auth. OWASP-Top-10 issues are Critical → NEEDS_REVISION.
+
 This code was AI-generated — apply extra vigilance for AI-specific failure
 modes (any language): (a) Missing functionality — scan the diff for removed
 calls/side-effects (logging, analytics, notifications, balance/state updates,
