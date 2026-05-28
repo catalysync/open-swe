@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableConfig
 
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
-from .projects import load_skills, project_root, resolve_project
+from .projects import load_skills, project_root, recent_memory, resolve_project
 from .state import HarnessState
 from .validator import run_gate
 
@@ -70,7 +70,9 @@ def supervisor_node(state: HarnessState, config: RunnableConfig) -> dict:
 def planner_node(state: HarnessState, config: RunnableConfig) -> dict:
     task = state.get("task") or _task_from_messages(state)
     root = _project_root(state, config)
-    plan = claude_text(prompts.PLANNER.format(task=task, project_root=root))
+    mem = recent_memory(root)
+    task_with_mem = task if not mem else f"{task}\n\nRecent successful builds here:\n{mem}"
+    plan = claude_text(prompts.PLANNER.format(task=task_with_mem, project_root=root))
     return {
         "task": task,
         "plan": plan,
@@ -186,5 +188,10 @@ def route_developer(state: HarnessState) -> Literal["turn", "reviewer"]:
     return "reviewer" if state.get("dev_done") else "turn"
 
 
-def route_aggregator(state: HarnessState) -> Literal["developer", "end"]:
-    return "developer" if state.get("status") == "developing" else "end"
+def route_aggregator(state: HarnessState) -> Literal["developer", "curator", "end"]:
+    status = state.get("status")
+    if status == "developing":
+        return "developer"
+    if status == "done":
+        return "curator"
+    return "end"  # escalated

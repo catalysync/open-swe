@@ -24,3 +24,4 @@ class HarnessState(TypedDict):
     validation: NotRequired[dict]
     retry_count: NotRequired[int]
     status: NotRequired[str]
+    proposal: NotRequired[dict | None]

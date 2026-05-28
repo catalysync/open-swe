@@ -7,6 +7,7 @@ project name mentioned in the task against git repos found in the workspace.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -57,4 +58,39 @@ def load_skills(root: str, limit: int = 8000) -> str:
         parts.append(f"### skill: {md.stem}\n{md.read_text()}")
     blob = "\n\n".join(parts)
     return blob[:limit]
+
+
+# ---- long-term memory (ADR 0007): successful patterns per project ----
+
+def _memory_path(root: str) -> Path:
+    return Path(root) / ".agents" / "harness-memory.jsonl"
+
+
+def append_memory(root: str, entry: dict) -> None:
+    path = _memory_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def recent_memory(root: str, n: int = 5) -> str:
+    path = _memory_path(root)
+    if not path.exists():
+        return ""
+    lines = path.read_text().splitlines()[-n:]
+    items = []
+    for ln in lines:
+        try:
+            e = json.loads(ln)
+            items.append(f"- {e.get('task', '')[:80]} → {e.get('summary', '')[:80]}")
+        except Exception:  # noqa: BLE001
+            continue
+    return "\n".join(items)
+
+
+def write_skill(root: str, name: str, content: str) -> str:
+    path = Path(root) / ".agents" / "skills" / f"{name}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    return str(path)
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 from langgraph.pregel import Pregel
 
-from . import nodes
+from . import curator, nodes
 from .state import HarnessState
 
 
@@ -26,6 +26,8 @@ def build_harness_graph() -> Pregel:
     g.add_node("reviewer", nodes.reviewer_node)
     g.add_node("validator", nodes.validator_node)
     g.add_node("aggregator", nodes.aggregator_node)
+    g.add_node("curator", curator.curator_propose)
+    g.add_node("curator_apply", curator.curator_apply)
 
     g.add_edge(START, "supervisor")
     g.add_conditional_edges(
@@ -42,7 +44,14 @@ def build_harness_graph() -> Pregel:
     g.add_edge("validator", "aggregator")
     g.add_conditional_edges(
         "aggregator", nodes.route_aggregator,
-        {"developer": "developer", "end": END},
+        {"developer": "developer", "curator": "curator", "end": END},
     )
+    g.add_conditional_edges(
+        "curator", curator.route_curator,
+        {"apply": "curator_apply", "end": END},
+    )
+    g.add_edge("curator_apply", END)
 
-    return g.compile()
+    # HITL (ADR 0008): pause before writing a learned template so the human
+    # approves/edits in Studio (resume to apply; clear `proposal` to skip).
+    return g.compile(interrupt_before=["curator_apply"])
