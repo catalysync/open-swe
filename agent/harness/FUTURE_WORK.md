@@ -14,7 +14,22 @@ gap, and a sketch. Ordered roughly by value-to-effort.
 - Subdir-scoped house rules (`projects.load_rules(touched=...)`) — Stripe scoped
   rule files (avoid context saturation).
 
-## Deferred
+## Deferred — durable infra (needs run/thread keying)
+
+### 0a. Per-run cost attribution
+`cost.py` is a process-global accumulator: correct for serial `bench` (resets per
+case) but under `langgraph dev` serving concurrent runs every run's tokens pile
+into one counter. Proper fix keys totals by `thread_id`/run (same shape as the
+SqliteSaver work) and stashes start/stop snapshots in graph state. Deliberately
+deferred — a quick thread-local swap is only partially correct under the async
+executor (one run can span threads), so it belongs with the durable-state work.
+
+### 0b. SqliteSaver durable checkpointer (ADR 0005 / 0007)
+Standalone runs use in-memory state; `langgraph dev` provides platform
+checkpointing. Wire `AsyncSqliteSaver` for durable resume + time-travel when run
+outside the platform.
+
+## Deferred — improvements
 
 ### 1. LLM-as-judge eval rubric + grow the suite (Anthropic)
 `bench.py` scores deterministic gates only. Add an LLM-judge pass scoring 0.0–1.0

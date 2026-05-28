@@ -48,11 +48,21 @@ def _detect_stack(root: Path) -> str:
 _GATES: dict[str, tuple[list[str] | None, list[str] | None, list[str] | None]] = {
     "python": (["ruff", "check", "."], ["pytest", "-q", "--no-header"], ["bandit", "-r", ".", "-q"]),
     "ruby": (["rubocop"], ["rspec"], ["brakeman", "-q", "--no-pager"]),
-    "go": (["go", "vet", "./..."], ["go", "test", "./..."], ["gosec", "./..."]),
+    "go": (["go", "vet", "./..."], ["go", "test", "-race", "./..."], ["gosec", "./..."]),
     "rust": (["cargo", "clippy", "--quiet"], ["cargo", "test", "--quiet"], ["cargo", "audit"]),
     "node": (["npx", "eslint", "."], ["npx", "vitest", "run"], ["npx", "semgrep", "--error", "--config=auto"]),
     "nextjs": (["npx", "eslint", "."], ["npx", "vitest", "run"], ["npx", "semgrep", "--error", "--config=auto"]),
     "nestjs": (["npx", "eslint", "."], ["npx", "jest"], ["npx", "semgrep", "--error", "--config=auto"]),
+}
+
+# stack -> type-check command (ADR 0003 Layer 1 "Types"). Skipped if tool absent;
+# go/rust type-check via their compilers (vet/clippy already cover that surface).
+_TYPES: dict[str, list[str]] = {
+    "python": ["mypy", "."],
+    "ruby": ["srb", "tc"],
+    "node": ["npx", "tsc", "--noEmit"],
+    "nextjs": ["npx", "tsc", "--noEmit"],
+    "nestjs": ["npx", "tsc", "--noEmit"],
 }
 
 # stack -> autofix commands run BEFORE the lint gate (Stripe Minions autofix).
@@ -101,9 +111,11 @@ def run_gate(project_root: str) -> dict:
     lint_cmd, test_cmd, sec_cmd = _GATES.get(stack, (None, None, None))
 
     errors: list[str] = []
-    lint_passed = tests_passed = security_passed = True
+    lint_passed = types_passed = tests_passed = security_passed = True
     ran = False
 
+    # Autofix runs in the validator (downstream of review), so mechanical
+    # formatting changes land unreviewed — intentional: they're not behaviour.
     autofixed = _autofix(stack, project_root)
 
     if lint_cmd and shutil.which(lint_cmd[0]):
@@ -112,6 +124,14 @@ def run_gate(project_root: str) -> dict:
         lint_passed = ok
         if not ok:
             errors.append(f"{lint_cmd[0]}:\n{out}")
+
+    type_cmd = _TYPES.get(stack)
+    if type_cmd and shutil.which(type_cmd[0]):
+        ran = True
+        ok, out = _run(type_cmd, project_root)
+        types_passed = ok
+        if not ok:
+            errors.append(f"types[{type_cmd[-1] if type_cmd[0] == 'npx' else type_cmd[0]}]:\n{out}")
 
     structural_passed, structural_errs = _run_structural(root)
     if structural_errs:
@@ -136,6 +156,7 @@ def run_gate(project_root: str) -> dict:
         "stack": stack,
         "autofixed": autofixed,
         "lint_passed": lint_passed,
+        "types_passed": types_passed,
         "structural_passed": structural_passed,
         "security_passed": security_passed,
         "tests_passed": tests_passed,

@@ -20,9 +20,10 @@ from .state import HarnessState
 _SEV = ["none", "low", "medium", "high", "critical"]
 
 
-def _diff(root: str) -> str:
+def _diff(root: str, base: str = "HEAD") -> str:
+    """Whole-run diff vs the base ref — includes work the developer committed."""
     try:
-        r = subprocess.run(["git", "diff", "HEAD"], cwd=root,
+        r = subprocess.run(["git", "diff", base], cwd=root,
                            capture_output=True, text=True, timeout=30)
         return r.stdout
     except Exception:  # noqa: BLE001
@@ -56,7 +57,7 @@ def _body(label: str, r: ReviewResult) -> AIMessage:
 
 
 def quality_reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
-    diff = _diff(project_root(state, config))
+    diff = _diff(project_root(state, config), state.get("base_ref", "HEAD"))
     if not diff.strip():
         return {"review_quality": ReviewResult(status="APPROVED").model_dump()}
     r = _review(prompts.QUALITY_REVIEWER, state.get("task", ""), diff, _dev_trace(state))
@@ -64,7 +65,7 @@ def quality_reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
 
 
 def security_reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
-    diff = _diff(project_root(state, config))
+    diff = _diff(project_root(state, config), state.get("base_ref", "HEAD"))
     if not diff.strip():
         return {"review_security": ReviewResult(status="APPROVED").model_dump()}
     r = _review(prompts.SECURITY_REVIEWER, state.get("task", ""), diff, _dev_trace(state))

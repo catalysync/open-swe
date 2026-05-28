@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from langchain_core.runnables import RunnableConfig
@@ -16,11 +17,19 @@ from langchain_core.runnables import RunnableConfig
 WORKSPACE = os.environ.get("HARNESS_WORKSPACE", "/workspaces/codespaces-blank")
 
 
-def project_root(state: dict, config: RunnableConfig) -> str:
+def explicit_project_root(state: dict, config: RunnableConfig) -> str | None:
+    """An explicitly-set target (state → config → env), or None if unset.
+
+    Lets the supervisor honour an explicit project_root OVER task-name routing,
+    matching the documented precedence (state → config → env → workspace)."""
     if state.get("project_root"):
         return state["project_root"]
     cfg = (config or {}).get("configurable", {}) or {}
-    return cfg.get("project_root") or os.environ.get("HARNESS_PROJECT_ROOT") or WORKSPACE
+    return cfg.get("project_root") or os.environ.get("HARNESS_PROJECT_ROOT")
+
+
+def project_root(state: dict, config: RunnableConfig) -> str:
+    return explicit_project_root(state, config) or WORKSPACE
 
 
 def discover_projects() -> dict[str, str]:
@@ -39,11 +48,14 @@ def discover_projects() -> dict[str, str]:
 
 
 def resolve_project(task: str) -> str | None:
-    """Pick the target repo by matching a project name mentioned in the task."""
+    """Pick the target repo by matching a project name mentioned in the task.
+
+    Whole-word match (not substring) so a short repo name like ``go`` or ``api``
+    can't match an unrelated word inside the task."""
     projects = discover_projects()
     lowered = task.lower()
     for name in sorted(projects, key=len, reverse=True):  # longest wins (nagara-atlas > atlas)
-        if name.lower() in lowered:
+        if re.search(rf"(?<![\w-]){re.escape(name.lower())}(?![\w-])", lowered):
             return projects[name]
     return None
 

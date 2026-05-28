@@ -21,9 +21,9 @@ from .state import HarnessState
 _SENTINEL = "NONE"
 
 
-def _diff(root: str) -> str:
+def _diff(root: str, base: str = "HEAD") -> str:
     try:
-        r = subprocess.run(["git", "diff", "HEAD"], cwd=root,
+        r = subprocess.run(["git", "diff", base], cwd=root,
                            capture_output=True, text=True, timeout=30)
         return r.stdout
     except Exception:  # noqa: BLE001
@@ -32,7 +32,7 @@ def _diff(root: str) -> str:
 
 def curator_propose(state: HarnessState) -> dict:
     root = state.get("project_root", ".")
-    diff = _diff(root)
+    diff = _diff(root, state.get("base_ref", "HEAD"))
     summary = ""
     for m in reversed(state["messages"]):
         if getattr(m, "type", None) == "ai" and isinstance(m.content, str) and m.content.strip():

@@ -14,7 +14,8 @@ from langchain_core.runnables import RunnableConfig
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
 from .projects import (
-    load_manifest, load_rules, load_skills, project_root, recent_memory, resolve_project,
+    explicit_project_root, load_manifest, load_rules, load_skills,
+    project_root, recent_memory, resolve_project,
 )
 from .retrieve import pre_hydrate
 from .state import HarnessState
@@ -26,10 +27,21 @@ MAX_RETRIES = 3  # ADR 0006/0012: escalate after 3 retries
 _project_root = project_root  # resolution order: state → config → env → workspace
 
 
-def _touched(root: str) -> list[str]:
-    """Files changed vs HEAD (uncommitted work from prior dev attempts)."""
+def _base_ref(root: str) -> str:
+    """The current HEAD SHA — captured at run start so every later diff measures
+    the run's whole change, even if the developer commits mid-run."""
     try:
-        r = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=root,
+        r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root,
+                           capture_output=True, text=True, timeout=30)
+        return r.stdout.strip() or "HEAD"
+    except Exception:  # noqa: BLE001
+        return "HEAD"
+
+
+def _touched(root: str, base: str = "HEAD") -> list[str]:
+    """Files changed vs the run's base ref (committed + uncommitted)."""
+    try:
+        r = subprocess.run(["git", "diff", "--name-only", base], cwd=root,
                            capture_output=True, text=True, timeout=30)
         return [ln for ln in r.stdout.splitlines() if ln.strip()]
     except Exception:  # noqa: BLE001
@@ -48,7 +60,9 @@ def _task_from_messages(state: HarnessState) -> str:
 def supervisor_node(state: HarnessState, config: RunnableConfig) -> dict:
     """ADR 0005 supervisor — triage (question vs build), resolve target repo, dispatch."""
     task = _task_from_messages(state)
-    target = resolve_project(task) or _project_root(state, config)
+    # explicit target wins; task-name routing is only a fallback (precedence:
+    # state → config → env → task-name → workspace)
+    target = explicit_project_root(state, config) or resolve_project(task) or _project_root(state, config)
 
     verdict = claude_text(
         "Classify the user's message as exactly one word: QUESTION (they want an "
@@ -72,6 +86,7 @@ def supervisor_node(state: HarnessState, config: RunnableConfig) -> dict:
     return {
         "task": task,
         "project_root": target,
+        "base_ref": _base_ref(target),
         "status": "planning",
         "retry_count": 0,
         "messages": [AIMessage(content=f"🧭 **Supervisor** (target: `{target}`)\n\n{framing}")],
@@ -111,7 +126,7 @@ def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
         ) + "\n"
     skills = load_skills(root)
     skills_block = f"\nSkill templates to follow EXACTLY:\n{skills}\n" if skills else ""
-    rules = load_rules(root, touched=_touched(root))
+    rules = load_rules(root, touched=_touched(root, state.get("base_ref", "HEAD")))
     rules_block = f"\nProject house rules (AGENTS.md/CLAUDE.md):\n{rules}\n" if rules else ""
     manifest = load_manifest(root)
     manifest_block = f"  Manifest — prefer these deps:\n  {manifest}\n" if manifest else ""
@@ -138,6 +153,7 @@ def validator_node(state: HarnessState, config: RunnableConfig) -> dict:
     validation = run_gate(root)
     summary = (
         f"lint={'pass' if validation['lint_passed'] else 'FAIL'} "
+        f"types={'pass' if validation.get('types_passed', True) else 'FAIL'} "
         f"tests={'pass' if validation['tests_passed'] else 'FAIL'} "
         f"{'(skipped — no toolchain)' if not validation.get('ran') else ''}"
     )
@@ -167,7 +183,7 @@ def aggregator_node(state: HarnessState) -> dict:
 
 
 def _val_ok(validation: dict) -> bool:
-    keys = ("lint_passed", "structural_passed", "security_passed", "tests_passed")
+    keys = ("lint_passed", "types_passed", "structural_passed", "security_passed", "tests_passed")
     return all(validation.get(k, True) for k in keys)
 
 

@@ -58,7 +58,7 @@ def _score(state: dict) -> int:
         s += 50
     if v.get("tests_passed", False):
         s += 20
-    if v.get("lint_passed", False) and v.get("security_passed", True):
+    if v.get("lint_passed", False) and v.get("types_passed", True) and v.get("security_passed", True):
         s += 15
     if review_ok:
         s += 15
@@ -77,7 +77,9 @@ def _run_one(name: str, files: dict[str, str], task: str) -> dict:
             config={"configurable": {"project_root": root}, "recursion_limit": 9999},
         )
     except Exception as exc:  # noqa: BLE001
-        return {"task": name, "error": str(exc)[:300], "score": 0, **cost.snapshot()}
+        c = cost.snapshot()
+        return {"task": name, "error": str(exc)[:300], "score": 0,
+                "usd": c["usd"], "tokens": c["input_tokens"] + c["output_tokens"]}
     v = final.get("validation") or {}
     review = final.get("review") or {}
     c = cost.snapshot()

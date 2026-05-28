@@ -19,6 +19,7 @@ class HarnessState(TypedDict):
     # so LangGraph checkpoints serialize cleanly)
     task: NotRequired[str]
     project_root: NotRequired[str]
+    base_ref: NotRequired[str]  # git SHA at run start — diff against this, not HEAD
     plan: NotRequired[str]
     review_quality: NotRequired[dict]
     review_security: NotRequired[dict]
