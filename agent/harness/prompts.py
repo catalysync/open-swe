@@ -87,7 +87,12 @@ events) that the change did NOT intend to drop; flag any silent removal. (b)
 Phantom/deprecated dependencies — flag imports/packages that may not exist, are
 deprecated, or use outdated signatures (esp. names with pro/advanced/fast, or
 "too convenient" imports). (c) Architectural fit — does it match the project's
-existing patterns, error-handling, naming and logging, or introduce a foreign one?
+existing patterns, error-handling, naming and logging, or introduce a foreign
+one? (d) Over-engineering (YAGNI) — needless abstractions/patterns/config built
+for hypothetical future needs; would simpler code do the same? (e) Test theater
+— tests that mock everything and verify nothing, only happy paths, or assert
+implementation details instead of behaviour; failure/edge cases and real
+integration points must be covered.
 
 Only file a finding when the diff clearly warrants it (no nitpicking). Respond
 with ONLY a JSON object matching this schema (no prose, no fences):
