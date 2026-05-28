@@ -16,7 +16,7 @@ from . import curator, nodes
 from .state import HarnessState
 
 
-def build_harness_graph() -> Pregel:
+def build_harness_graph(hitl: bool = True) -> Pregel:
     g = StateGraph(HarnessState)
 
     g.add_node("supervisor", nodes.supervisor_node)
@@ -53,5 +53,5 @@ def build_harness_graph() -> Pregel:
     g.add_edge("curator_apply", END)
 
     # HITL (ADR 0008): pause before writing a learned template so the human
-    # approves/edits in Studio (resume to apply; clear `proposal` to skip).
-    return g.compile(interrupt_before=["curator_apply"])
+    # approves/edits in Studio. Disabled for unattended runs (e.g. benchmarks).
+    return g.compile(interrupt_before=["curator_apply"] if hitl else [])
