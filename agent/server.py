@@ -366,6 +366,7 @@ def _get_cached_sandbox_backend(thread_id: str) -> SandboxBackendProtocol:
 async def get_agent(config: RunnableConfig) -> Pregel:
     """Get or create an agent — uses claude -p via Max subscription."""
     from .claude_agent import build_claude_agent
+    config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
     return build_claude_agent().with_config(config)
 
 

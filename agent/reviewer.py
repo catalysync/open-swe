@@ -498,7 +498,14 @@ def _format_existing_findings(findings: list[dict]) -> str:
 
 
 async def get_reviewer_agent(config: RunnableConfig) -> Pregel:
-    """Get or create a reviewer agent with a sandbox + prepped repo."""
+    """Reviewer agent — routes through claude -p like the main agent."""
+    from .claude_agent import build_claude_agent
+    config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
+    return build_claude_agent().with_config(config)
+
+
+async def _get_reviewer_agent_original(config: RunnableConfig) -> Pregel:
+    """Original Deep Agents reviewer (needs API key)."""
     thread_id = config["configurable"].get("thread_id", None)
 
     config["recursion_limit"] = DEFAULT_RECURSION_LIMIT

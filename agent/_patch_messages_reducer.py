@@ -44,7 +44,35 @@ def _load_messages_reducer_module():
     return mod
 
 
+def _patch_read_runtime_override() -> None:
+    """Add ``override`` to langgraph-sdk's ``_ReadRuntime``.
+
+    langgraph 1.x's draw/introspection path (``GET /assistants/{id}/graph``)
+    calls ``runtime.override(...)``, but the server substitutes langgraph-sdk's
+    ``_ReadRuntime``, which lacks the method — crashing graph preview (which the
+    Studio chat tab is gated on). Mirror ``Runtime.override`` via ``replace``.
+    """
+    try:
+        from dataclasses import replace
+
+        from langgraph_sdk.runtime import _ReadRuntime
+    except Exception:  # noqa: BLE001
+        return
+
+    if hasattr(_ReadRuntime, "override"):
+        return
+
+    def override(self, **overrides):  # type: ignore[no-untyped-def]
+        try:
+            return replace(self, **overrides)
+        except Exception:  # noqa: BLE001
+            return self
+
+    _ReadRuntime.override = override  # type: ignore[attr-defined]
+
+
 def _apply() -> None:
+    _patch_read_runtime_override()
     mod = _load_messages_reducer_module()
     if getattr(mod._messages_delta_reducer, _PATCHED_ATTR, False):
         return

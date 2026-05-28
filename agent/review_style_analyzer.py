@@ -109,6 +109,13 @@ async def _configure_sandbox_github_proxy(
 
 
 async def get_review_style_analyzer(config: RunnableConfig) -> Pregel:
+    """Review-style analyzer — routes through claude -p like the main agent."""
+    from .claude_agent import build_claude_agent
+    config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
+    return build_claude_agent().with_config(config)
+
+
+async def _get_review_style_analyzer_original(config: RunnableConfig) -> Pregel:
     thread_id = config["configurable"].get("thread_id")
     config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
 
