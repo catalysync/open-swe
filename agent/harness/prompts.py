@@ -42,11 +42,9 @@ Review the git diff below across Google's code-review dimensions:
 - Documentation: relevant docs updated?
 
 Only file a finding when the diff clearly warrants it (no nitpicking). Respond
-in EXACTLY this format:
+with ONLY a JSON object matching this schema (no prose, no fences):
 
-STATUS: APPROVED   (or)   STATUS: NEEDS_REVISION
-FINDINGS:
-- <dimension>: <finding>   (one per line, or "none")
+{{"status": "APPROVED" | "NEEDS_REVISION", "findings": ["<dimension>: <finding>", ...]}}
 
 Diff:
 {diff}"""
