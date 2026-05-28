@@ -9,11 +9,30 @@ so Studio renders tool calls as they happen; reasoning nodes are text-only.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from langgraph.graph import END, START, StateGraph
 from langgraph.pregel import Pregel
 
 from . import curator, nodes
 from .state import HarnessState
+
+
+def route_supervisor(state: HarnessState) -> Literal["planner", "end"]:
+    return "end" if state.get("status") == "done" else "planner"
+
+
+def route_developer(state: HarnessState) -> Literal["turn", "reviewer"]:
+    return "reviewer" if state.get("dev_done") else "turn"
+
+
+def route_aggregator(state: HarnessState) -> Literal["developer", "curator", "end"]:
+    status = state.get("status")
+    if status == "developing":
+        return "developer"
+    if status == "done":
+        return "curator"
+    return "end"  # escalated
 
 
 def build_harness_graph(hitl: bool = True) -> Pregel:
@@ -31,19 +50,19 @@ def build_harness_graph(hitl: bool = True) -> Pregel:
 
     g.add_edge(START, "supervisor")
     g.add_conditional_edges(
-        "supervisor", nodes.route_supervisor,
+        "supervisor", route_supervisor,
         {"planner": "planner", "end": END},
     )
     g.add_edge("planner", "developer")
     g.add_edge("developer", "developer_turn")
     g.add_conditional_edges(
-        "developer_turn", nodes.route_developer,
+        "developer_turn", route_developer,
         {"turn": "developer_turn", "reviewer": "reviewer"},
     )
     g.add_edge("reviewer", "validator")
     g.add_edge("validator", "aggregator")
     g.add_conditional_edges(
-        "aggregator", nodes.route_aggregator,
+        "aggregator", route_aggregator,
         {"developer": "developer", "curator": "curator", "end": END},
     )
     g.add_conditional_edges(

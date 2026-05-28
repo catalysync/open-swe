@@ -21,6 +21,7 @@ T = TypeVar("T", bound=BaseModel)
 
 class ReviewResult(BaseModel):
     status: Literal["APPROVED", "NEEDS_REVISION"]
+    severity: Literal["none", "low", "medium", "high", "critical"] = "none"
     findings: list[str] = Field(default_factory=list)
 
 

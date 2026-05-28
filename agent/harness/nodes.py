@@ -7,7 +7,6 @@ the full pipeline as a conversation, while typed fields drive routing.
 from __future__ import annotations
 
 import subprocess
-from typing import Literal
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
@@ -155,13 +154,16 @@ def aggregator_node(state: HarnessState) -> dict:
     review_ok = review.get("status") == "APPROVED"
     val_ok = _val_ok(validation)
 
+    crit = review.get("severity") == "critical" and not review_ok
     if review_ok and val_ok:
         return {"status": "done",
                 "messages": [AIMessage(content="🎉 **Done** — review approved, gates green.")]}
-    if retry >= MAX_RETRIES:
+    if crit or retry >= MAX_RETRIES:
         un = list(dict.fromkeys(review.get("findings", []) + validation.get("errors", [])))
         items = "\n".join(f"- {u}" for u in un) or "- (none captured)"
-        return {"status": "escalated", "messages": [AIMessage(content=f"⚠️ **Escalated** after {retry} retries. Unresolved:\n{items}")]}
+        why = "critical finding — needs a human" if crit else f"{retry} retries"
+        return {"status": "escalated",
+                "messages": [AIMessage(content=f"⚠️ **Escalated** ({why}).\n{items}")]}
     return {"status": "developing", "retry_count": retry + 1, "dev_done": False,
             "messages": [AIMessage(content=f"🔁 **Retry {retry + 1}** — sending feedback back to developer.")]}
 
@@ -180,20 +182,3 @@ def _git_diff(root: str) -> str:
         return ""
 
 
-# ---- routers ----
-
-def route_supervisor(state: HarnessState) -> Literal["planner", "end"]:
-    return "end" if state.get("status") == "done" else "planner"
-
-
-def route_developer(state: HarnessState) -> Literal["turn", "reviewer"]:
-    return "reviewer" if state.get("dev_done") else "turn"
-
-
-def route_aggregator(state: HarnessState) -> Literal["developer", "curator", "end"]:
-    status = state.get("status")
-    if status == "developing":
-        return "developer"
-    if status == "done":
-        return "curator"
-    return "end"  # escalated
