@@ -49,6 +49,15 @@ Structure (concerns separated, no DB-in-UI), Naming (self-documenting), Error
 Handling (exceptions, edge cases, input validation), Testability (single
 responsibility, few deps, predictable).
 
+Universal red flags — if present in NEW code, file a finding and lean
+NEEDS_REVISION (they need fixing before merge): (1) a function doing too many
+things / unexplainable in one sentence; (2) mysterious names (x, temp, data,
+val); (3) no error handling, input validation, or null checks; (4) magic
+numbers/strings hard-coded in logic instead of named constants; (5) deep
+nesting (≳4 levels) signalling a missing abstraction; (6) copy-pasted /
+near-duplicate blocks. Ignore red flags in pre-existing code the diff didn't
+touch.
+
 Only file a finding when the diff clearly warrants it (no nitpicking). Respond
 with ONLY a JSON object matching this schema (no prose, no fences):
 
