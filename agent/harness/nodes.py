@@ -26,6 +26,16 @@ MAX_RETRIES = 3  # ADR 0006/0012: escalate after 3 retries
 _project_root = project_root  # resolution order: state → config → env → workspace
 
 
+def _touched(root: str) -> list[str]:
+    """Files changed vs HEAD (uncommitted work from prior dev attempts)."""
+    try:
+        r = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=root,
+                           capture_output=True, text=True, timeout=30)
+        return [ln for ln in r.stdout.splitlines() if ln.strip()]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def _task_from_messages(state: HarnessState) -> str:
     for msg in state["messages"]:
         if isinstance(msg, HumanMessage):
@@ -101,7 +111,7 @@ def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
         ) + "\n"
     skills = load_skills(root)
     skills_block = f"\nSkill templates to follow EXACTLY:\n{skills}\n" if skills else ""
-    rules = load_rules(root)
+    rules = load_rules(root, touched=_touched(root))
     rules_block = f"\nProject house rules (AGENTS.md/CLAUDE.md):\n{rules}\n" if rules else ""
     manifest = load_manifest(root)
     manifest_block = f"  Manifest — prefer these deps:\n  {manifest}\n" if manifest else ""

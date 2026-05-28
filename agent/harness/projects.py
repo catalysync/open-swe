@@ -48,13 +48,35 @@ def resolve_project(task: str) -> str | None:
     return None
 
 
-def load_rules(root: str, limit: int = 6000) -> str:
-    """Load the project's house-rules catalog (AGENTS.md + CLAUDE.md) for prompts (idea #4)."""
+def load_rules(root: str, limit: int = 6000, touched: list[str] | None = None) -> str:
+    """House-rules for prompts (AGENTS.md + CLAUDE.md).
+
+    Root-level rules always apply. When ``touched`` (paths relative to root) is
+    given, also fold in nested rule files in those files' ancestor directories —
+    and ONLY those — so deep repos don't saturate the context with rules for code
+    this change never touches (Stripe Minions: subdir-scoped rule files).
+    """
+    base = Path(root)
     parts: list[str] = []
     for fname in ("AGENTS.md", "CLAUDE.md"):
-        p = Path(root) / fname
+        p = base / fname
         if p.is_file():
             parts.append(f"### {fname}\n{p.read_text()}")
+
+    if touched:
+        dirs: set[Path] = set()
+        for rel in touched:
+            for parent in (base / rel).parents:
+                if parent == base or base in parent.parents:
+                    dirs.add(parent)
+        for d in sorted(dirs):
+            if d == base:
+                continue
+            for fname in ("AGENTS.md", "CLAUDE.md"):
+                p = d / fname
+                if p.is_file():
+                    parts.append(f"### {p.relative_to(base)}\n{p.read_text()}")
+
     return "\n\n".join(parts)[:limit]
 
 

@@ -66,7 +66,7 @@ QUALITY_REVIEWER = """You are the QUALITY REVIEWER in a multi-agent SWE harness.
 
 Original task:
 {task}
-
+{trace}
 Review the git diff across Google's quality dimensions: Design, Functionality
 (edge cases), Complexity (could it be simpler?), Tests, Naming, Comments
 (explain WHY), Style/house-rules, Documentation.
@@ -92,7 +92,7 @@ SECURITY_REVIEWER = """You are the SECURITY & RELIABILITY REVIEWER in a harness.
 
 Original task:
 {task}
-
+{trace}
 Review the git diff for security and reliability ONLY (correct != secure, even
 with "secure" libs). Security: injection — SQL/shell via string concat/f-strings
 vs parameterized/`?`; missing input validation on user/DB/auth paths; insecure
