@@ -92,7 +92,7 @@ def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
     review = state.get("review") or {}
     validation = state.get("validation") or {}
     if review.get("status") == "NEEDS_REVISION" or (validation and not _val_ok(validation)):
-        notes = review.get("findings", []) + validation.get("errors", [])
+        notes = list(dict.fromkeys(review.get("findings", []) + validation.get("errors", [])))
         feedback = "\nReviewer/validator feedback to address:\n" + "\n".join(
             f"- {n}" for n in notes
         ) + "\n"
@@ -155,8 +155,9 @@ def aggregator_node(state: HarnessState) -> dict:
         return {"status": "done",
                 "messages": [AIMessage(content="🎉 **Done** — review approved, gates green.")]}
     if retry >= MAX_RETRIES:
-        return {"status": "escalated",
-                "messages": [AIMessage(content=f"⚠️ **Escalated** — still failing after {retry} retries. Needs a human.")]}
+        un = list(dict.fromkeys(review.get("findings", []) + validation.get("errors", [])))
+        items = "\n".join(f"- {u}" for u in un) or "- (none captured)"
+        return {"status": "escalated", "messages": [AIMessage(content=f"⚠️ **Escalated** after {retry} retries. Unresolved:\n{items}")]}
     return {"status": "developing", "retry_count": retry + 1, "dev_done": False,
             "messages": [AIMessage(content=f"🔁 **Retry {retry + 1}** — sending feedback back to developer.")]}
 
