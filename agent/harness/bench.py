@@ -77,11 +77,13 @@ def _run_one(name: str, files: dict[str, str], task: str) -> dict:
     except Exception as exc:  # noqa: BLE001
         return {"task": name, "error": str(exc)[:300], "score": 0}
     v = final.get("validation") or {}
+    review = final.get("review") or {}
     return {
         "task": name,
         "status": final.get("status"),
         "retries": final.get("retry_count", 0),
-        "review": (final.get("review") or {}).get("status"),
+        "review": review.get("status"),
+        "n_findings": len(review.get("findings", [])),
         "lint": v.get("lint_passed"),
         "security": v.get("security_passed"),
         "tests": v.get("tests_passed"),

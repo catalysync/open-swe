@@ -33,8 +33,10 @@ Avoid the common AI-codegen pitfalls (any language):
 - Prefer MINIMAL, incremental edits — change only what the task needs; do NOT
   rewrite whole functions/files (wholesale rewrites are how existing behaviour
   gets silently lost).
-- Use only REAL, current dependencies — never invent packages or use deprecated
-  modules/outdated APIs. If unsure a library exists, check before importing.
+- Use only REAL, current dependencies — prefer libraries already in the
+  manifest below; never invent packages or use deprecated/outdated APIs. If
+  unsure a library exists, check before importing.
+{manifest}
 - Match the project's existing architecture, error-handling, naming and logging
   conventions — don't introduce a foreign pattern.
 
@@ -82,6 +84,13 @@ calls without timeouts, status-code handling, or structured results (returning
 None instead of a clear error); unmanaged resources — connections/files/cursors
 not closed on all paths (no context manager / try-finally); no rate limiting on
 auth. OWASP-Top-10 issues are Critical → NEEDS_REVISION.
+
+Reliability under load: flag DB queries inside loops (N+1), unbounded in-memory
+caches/collections that grow per request, network/IO without retry+backoff+
+fallback, and reading whole files into memory where streaming is expected. If
+the diff implements a decision/scoring/ranking algorithm or collects/shares
+personal data, also check for protected-attribute proxies (zip, age, etc.),
+unnecessary data collection, and undisclosed third-party sharing.
 
 This code was AI-generated — apply extra vigilance for AI-specific failure
 modes (any language): (a) Missing functionality — scan the diff for removed

@@ -15,7 +15,9 @@ from langchain_core.runnables import RunnableConfig
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
 from .contracts import ReviewResult, parse_or_repair
-from .projects import load_rules, load_skills, project_root, recent_memory, resolve_project
+from .projects import (
+    load_manifest, load_rules, load_skills, project_root, recent_memory, resolve_project,
+)
 from .state import HarnessState
 from .validator import run_gate
 
@@ -100,8 +102,10 @@ def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
     skills_block = f"\nSkill templates to follow EXACTLY:\n{skills}\n" if skills else ""
     rules = load_rules(root)
     rules_block = f"\nProject house rules (AGENTS.md/CLAUDE.md):\n{rules}\n" if rules else ""
+    manifest = load_manifest(root)
+    manifest_block = f"  Manifest — prefer these deps:\n  {manifest}\n" if manifest else ""
     prompt = prompts.DEVELOPER.format(
-        task=state.get("task", ""), plan=state.get("plan", ""),
+        task=state.get("task", ""), plan=state.get("plan", ""), manifest=manifest_block,
         rules=rules_block, skills=skills_block, feedback=feedback, project_root=root,
     )
     key = start_dev(prompt)

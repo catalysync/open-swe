@@ -58,6 +58,19 @@ def load_rules(root: str, limit: int = 6000) -> str:
     return "\n\n".join(parts)[:limit]
 
 
+_MANIFESTS = ("requirements.txt", "pyproject.toml", "package.json", "go.mod", "Cargo.toml", "Gemfile")
+
+
+def load_manifest(root: str, limit: int = 3000) -> str:
+    """The project's real dependency manifest — anchors deps so the developer
+    only uses libraries that actually exist (phantom-dependency prevention)."""
+    for fname in _MANIFESTS:
+        p = Path(root) / fname
+        if p.is_file():
+            return f"{fname}:\n{p.read_text()[:limit]}"
+    return ""
+
+
 def load_skills(root: str, limit: int = 8000) -> str:
     """Concatenate the project's .agents/skills/*.md templates for the developer prompt (ADR 0006)."""
     skills_dir = Path(root) / ".agents" / "skills"
