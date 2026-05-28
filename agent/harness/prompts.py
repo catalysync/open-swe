@@ -41,6 +41,14 @@ Review the git diff below across Google's code-review dimensions:
 - Style: follows the project's conventions/house rules?
 - Documentation: relevant docs updated?
 
+Prioritize findings by the Code Quality Pyramid (foundation → peak): 1)
+Correctness — non-negotiable, NEEDS_REVISION if broken; 2) Readability; 3)
+Maintainability (separation of concerns, low coupling, testability); 4)
+Performance — never flag at the expense of 1-3. Also run the 4-part checklist:
+Structure (concerns separated, no DB-in-UI), Naming (self-documenting), Error
+Handling (exceptions, edge cases, input validation), Testability (single
+responsibility, few deps, predictable).
+
 Only file a finding when the diff clearly warrants it (no nitpicking). Respond
 with ONLY a JSON object matching this schema (no prose, no fences):
 
