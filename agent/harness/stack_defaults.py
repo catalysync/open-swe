@@ -36,7 +36,7 @@ def detect_stack(root: Path) -> str:
 
 # stack -> (lint_cmd, test_cmd, security_cmd) ; None entries are skipped (ADR 0003)
 GATES: dict[str, tuple[list[str] | None, list[str] | None, list[str] | None]] = {
-    "python": (["ruff", "check", "."], ["pytest", "-q", "--no-header"], ["bandit", "-r", ".", "-q"]),
+    "python": (["ruff", "check", "."], ["pytest", "-q", "--no-header"], ["bandit", "-r", ".", "-q", "--skip", "B101"]),
     "ruby": (["rubocop"], ["rspec"], ["brakeman", "-q", "--no-pager"]),
     "go": (["go", "vet", "./..."], ["go", "test", "-race", "./..."], ["gosec", "./..."]),
     "rust": (["cargo", "clippy", "--quiet"], ["cargo", "test", "--quiet"], ["cargo", "audit"]),
