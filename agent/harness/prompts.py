@@ -20,10 +20,10 @@ Task:
 
 Plan from the planner:
 {plan}
-{feedback}
+{skills}{feedback}
 Implement the plan in {project_root}. Read, write, and edit files and run
-commands as needed. Follow the project's existing conventions. When done,
-briefly summarize what you changed."""
+commands as needed. Follow the project's existing conventions and any skill
+templates above EXACTLY. When done, briefly summarize what you changed."""
 
 REVIEWER = """You are the REVIEWER in a multi-agent software engineering harness.
 

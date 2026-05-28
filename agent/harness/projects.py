@@ -45,3 +45,16 @@ def resolve_project(task: str) -> str | None:
         if name.lower() in lowered:
             return projects[name]
     return None
+
+
+def load_skills(root: str, limit: int = 8000) -> str:
+    """Concatenate the project's .agents/skills/*.md templates for the developer prompt (ADR 0006)."""
+    skills_dir = Path(root) / ".agents" / "skills"
+    if not skills_dir.is_dir():
+        return ""
+    parts: list[str] = []
+    for md in sorted(skills_dir.glob("*.md")):
+        parts.append(f"### skill: {md.stem}\n{md.read_text()}")
+    blob = "\n\n".join(parts)
+    return blob[:limit]
+

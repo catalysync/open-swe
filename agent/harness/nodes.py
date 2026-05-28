@@ -14,7 +14,7 @@ from langchain_core.runnables import RunnableConfig
 
 from . import prompts
 from .claude import claude_text, read_dev_turn, start_dev
-from .projects import project_root, resolve_project
+from .projects import load_skills, project_root, resolve_project
 from .state import HarnessState
 from .validator import run_gate
 
@@ -91,9 +91,11 @@ def developer_node(state: HarnessState, config: RunnableConfig) -> dict:
         feedback = "\nReviewer/validator feedback to address:\n" + "\n".join(
             f"- {n}" for n in notes
         ) + "\n"
+    skills = load_skills(root)
+    skills_block = f"\nSkill templates to follow EXACTLY:\n{skills}\n" if skills else ""
     prompt = prompts.DEVELOPER.format(
         task=state.get("task", ""), plan=state.get("plan", ""),
-        feedback=feedback, project_root=root,
+        skills=skills_block, feedback=feedback, project_root=root,
     )
     key = start_dev(prompt)
     return {"proc_key": key, "dev_done": False, "pending_tool_ids": [], "status": "developing"}
@@ -158,7 +160,11 @@ def aggregator_node(state: HarnessState) -> dict:
 def _val_ok(validation: dict) -> bool:
     if not validation:
         return True
-    return validation.get("lint_passed", True) and validation.get("tests_passed", True)
+    return (
+        validation.get("lint_passed", True)
+        and validation.get("structural_passed", True)
+        and validation.get("tests_passed", True)
+    )
 
 
 def _git_diff(root: str) -> str:

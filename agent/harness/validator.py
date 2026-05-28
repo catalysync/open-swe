@@ -56,6 +56,23 @@ _GATES: dict[str, tuple[list[str] | None, list[str] | None]] = {
 }
 
 
+def _run_structural(root: Path) -> tuple[bool, list[str]]:
+    """ADR 0006: run the project's .agents/validators/*.py AST/structural checks.
+
+    Each validator script exits non-zero (with stdout/stderr explaining) when the
+    generated code violates a required structure. Absent dir = no structural gate.
+    """
+    vdir = root / ".agents" / "validators"
+    if not vdir.is_dir():
+        return True, []
+    errs: list[str] = []
+    for script in sorted(vdir.glob("*.py")):
+        ok, out = _run(["python", str(script)], str(root), timeout=120)
+        if not ok:
+            errs.append(f"structural[{script.stem}]:\n{out}")
+    return (not errs), errs
+
+
 def run_gate(project_root: str) -> dict:
     root = Path(project_root)
     stack = _detect_stack(root)
@@ -72,6 +89,11 @@ def run_gate(project_root: str) -> dict:
         if not ok:
             errors.append(f"{lint_cmd[0]}:\n{out}")
 
+    structural_passed, structural_errs = _run_structural(root)
+    if structural_errs:
+        ran = True
+        errors.extend(structural_errs)
+
     if test_cmd and shutil.which(test_cmd[0]):
         ran = True
         ok, out = _run(test_cmd, project_root)
@@ -82,6 +104,7 @@ def run_gate(project_root: str) -> dict:
     return {
         "stack": stack,
         "lint_passed": lint_passed,
+        "structural_passed": structural_passed,
         "tests_passed": tests_passed,
         "errors": errors,
         "ran": ran,
