@@ -19,6 +19,7 @@ import subprocess
 from pathlib import Path
 
 from .gates import resolve_project_gates
+from .limits import check_limits
 from .stack_defaults import FIXERS, GATES, TYPES, detect_stack
 
 
@@ -41,19 +42,19 @@ def _autofix(stack: str, root: str) -> bool:
 
 
 def _run_structural(root: Path) -> tuple[bool, list[str]]:
-    """ADR 0006: run the project's .agents/validators/*.py AST/structural checks.
+    """Built-in limits gate (file/function length + cyclomatic complexity, see
+    limits.py) plus the project's own .agents/validators/*.py checks (ADR 0006).
 
-    Each validator script exits non-zero (with stdout/stderr explaining) when the
-    generated code violates a required structure. Absent dir = no structural gate.
+    The limits gate always runs; each validator script exits non-zero (with
+    stdout/stderr explaining) when generated code violates a required structure.
     """
+    _, errs = check_limits(root)
     vdir = root / ".agents" / "validators"
-    if not vdir.is_dir():
-        return True, []
-    errs: list[str] = []
-    for script in sorted(vdir.glob("*.py")):
-        ok, out = _run(["python", str(script)], str(root), timeout=120)
-        if not ok:
-            errs.append(f"structural[{script.stem}]:\n{out}")
+    if vdir.is_dir():
+        for script in sorted(vdir.glob("*.py")):
+            ok, out = _run(["python", str(script)], str(root), timeout=120)
+            if not ok:
+                errs.append(f"structural[{script.stem}]:\n{out}")
     return (not errs), errs
 
 
@@ -96,10 +97,46 @@ def _run_declared(
     }
 
 
+def _run_defaults(root: Path, stack: str, autofixed: bool) -> dict:
+    """Tier 3: per-stack default tool-set (fallback for bare repos)."""
+    lint_cmd, test_cmd, sec_cmd = GATES.get(stack, (None, None, None))
+    checks = [("lint", lint_cmd), ("types", TYPES.get(stack)),
+              ("security", sec_cmd), ("tests", test_cmd)]
+    results: dict[str, bool] = {}
+    errors: list[str] = []
+    ran = False
+    for name, cmd in checks:
+        if not cmd or not shutil.which(cmd[0]):
+            continue
+        ran = True
+        ok, out = _run(cmd, str(root))
+        results[name] = ok
+        if not ok:
+            errors.append(f"{name}[{cmd[0]}]:\n{out}")
+
+    structural_passed, structural_errs = _run_structural(root)
+    if structural_errs:
+        ran = True
+        errors.extend(structural_errs)
+    passed = all(results.values()) and structural_passed
+    return {
+        "stack": stack,
+        "gate_source": "stack-default",
+        "autofixed": autofixed,
+        "lint_passed": results.get("lint", True),
+        "types_passed": results.get("types", True),
+        "structural_passed": structural_passed,
+        "security_passed": results.get("security", True),
+        "tests_passed": results.get("tests", True),
+        "passed": passed,
+        "errors": errors,
+        "ran": ran,
+    }
+
+
 def run_gate(project_root: str) -> dict:
     root = Path(project_root)
     stack = detect_stack(root)
-
     # tier 1/2: the project's declared or conventional standard tool-set wins.
     autofixed = _autofix(stack, project_root)
     resolved = resolve_project_gates(root)
@@ -108,59 +145,5 @@ def run_gate(project_root: str) -> dict:
         declared = _run_declared(root, stack, autofixed, source, gates)
         if declared is not None:
             return declared
-
-    # tier 3: per-stack defaults (fallback for bare repos).
-    lint_cmd, test_cmd, sec_cmd = GATES.get(stack, (None, None, None))
-
-    errors: list[str] = []
-    lint_passed = types_passed = tests_passed = security_passed = True
-    ran = False
-
-    if lint_cmd and shutil.which(lint_cmd[0]):
-        ran = True
-        ok, out = _run(lint_cmd, project_root)
-        lint_passed = ok
-        if not ok:
-            errors.append(f"{lint_cmd[0]}:\n{out}")
-
-    type_cmd = TYPES.get(stack)
-    if type_cmd and shutil.which(type_cmd[0]):
-        ran = True
-        ok, out = _run(type_cmd, project_root)
-        types_passed = ok
-        if not ok:
-            errors.append(f"types[{type_cmd[-1] if type_cmd[0] == 'npx' else type_cmd[0]}]:\n{out}")
-
-    structural_passed, structural_errs = _run_structural(root)
-    if structural_errs:
-        ran = True
-        errors.extend(structural_errs)
-
-    if sec_cmd and shutil.which(sec_cmd[0]):
-        ran = True
-        ok, out = _run(sec_cmd, project_root)
-        security_passed = ok
-        if not ok:
-            errors.append(f"security[{sec_cmd[0]}]:\n{out}")
-
-    if test_cmd and shutil.which(test_cmd[0]):
-        ran = True
-        ok, out = _run(test_cmd, project_root)
-        tests_passed = ok
-        if not ok:
-            errors.append(f"{test_cmd[0]}:\n{out}")
-
-    passed = lint_passed and types_passed and structural_passed and security_passed and tests_passed
-    return {
-        "stack": stack,
-        "gate_source": "stack-default",
-        "autofixed": autofixed,
-        "lint_passed": lint_passed,
-        "types_passed": types_passed,
-        "structural_passed": structural_passed,
-        "security_passed": security_passed,
-        "tests_passed": tests_passed,
-        "passed": passed,
-        "errors": errors,
-        "ran": ran,
-    }
+    # tier 3: per-stack defaults.
+    return _run_defaults(root, stack, autofixed)
