@@ -14,7 +14,7 @@ from typing import Literal
 from langgraph.graph import END, START, StateGraph
 from langgraph.pregel import Pregel
 
-from . import curator, nodes, reviewers
+from . import curator, nodes, publish, reviewers
 from .state import HarnessState
 
 
@@ -30,12 +30,12 @@ def _reviews_entry(state: HarnessState) -> dict:
     return {}  # fan-out point: static edges dispatch to both reviewers in parallel
 
 
-def route_aggregator(state: HarnessState) -> Literal["developer", "curator", "end"]:
+def route_aggregator(state: HarnessState) -> Literal["developer", "pr", "end"]:
     status = state.get("status")
     if status == "developing":
         return "developer"
     if status == "done":
-        return "curator"
+        return "pr"  # success → open a PR, then learn a template
     return "end"  # escalated
 
 
@@ -52,6 +52,7 @@ def build_harness_graph(hitl: bool = True) -> Pregel:
     g.add_node("review_merge", reviewers.review_merge_node)
     g.add_node("validator", nodes.validator_node)
     g.add_node("aggregator", nodes.aggregator_node)
+    g.add_node("pr", publish.publish_pr)
     g.add_node("curator", curator.curator_propose)
     g.add_node("curator_apply", curator.curator_apply)
 
@@ -74,8 +75,9 @@ def build_harness_graph(hitl: bool = True) -> Pregel:
     g.add_edge("validator", "aggregator")
     g.add_conditional_edges(
         "aggregator", route_aggregator,
-        {"developer": "developer", "curator": "curator", "end": END},
+        {"developer": "developer", "pr": "pr", "end": END},
     )
+    g.add_edge("pr", "curator")
     g.add_conditional_edges(
         "curator", curator.route_curator,
         {"apply": "curator_apply", "end": END},
