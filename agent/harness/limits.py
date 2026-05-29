@@ -6,9 +6,9 @@ lives under. Keeps generated code small + simple instead of letting an agent shi
 a 600-line module with a 40-branch function that still passes lint/tests.
 
 Scope: only files CHANGED vs HEAD (+ untracked) in this run, so pre-existing legacy
-debt never blocks a fix. File-length is language-agnostic; per-function length +
-cyclomatic complexity use radon and therefore cover Python only — TS/JS complexity
-rides on the consumer's ESLint (`complexity`, `max-lines-per-function`).
+debt never blocks a fix. File-length is language-agnostic. Per-function length +
+cyclomatic complexity use radon for Python and lizard for everything else
+(TS/JS/Go/Rust/Ruby), so the same caps cover backend and frontend.
 
 Thresholds default to file=200 / function=60 / complexity=10 and are overridable
 per-project via `.agents/limits.toml`:
@@ -52,10 +52,10 @@ def _git(args: list[str], root: Path) -> list[str]:
         return []
 
 
-def _changed_source_files(root: Path) -> list[Path]:
-    """Files touched in this run (diff vs HEAD + staged + untracked). Empty list
+def _changed_source_files(root: Path, base: str = "HEAD") -> list[Path]:
+    """Files touched in this run (diff vs base + staged + untracked). Empty list
     when not a git repo → caller skips (we never scan a whole legacy tree)."""
-    names = set(_git(["diff", "--name-only", "HEAD"], root))
+    names = set(_git(["diff", "--name-only", base], root))
     names |= set(_git(["diff", "--name-only", "--cached"], root))
     names |= set(_git(["ls-files", "--others", "--exclude-standard"], root))
     out: list[Path] = []
@@ -98,9 +98,36 @@ def _radon_blocks(files: list[Path], root: Path) -> list[tuple[str, dict]]:
     return out
 
 
-def _check_python_complexity(files: list[Path], root: Path, max_cc: int, max_fn: int) -> list[str]:
+def _lizard_blocks(files: list[Path], root: Path) -> list[tuple[str, dict]]:
+    """Non-Python source via lizard (TS/JS/Go/Rust/Ruby). Normalised to the same
+    {name, lineno, endline, complexity} shape radon emits."""
+    others = [p for p in files if p.suffix not in (".py", ".pyi")]
+    if not others:
+        return []
+    try:
+        import lizard  # noqa: PLC0415 — optional dep, lazy so the gate degrades gracefully
+    except Exception:  # noqa: BLE001
+        return []
+    out: list[tuple[str, dict]] = []
+    for p in others:
+        try:
+            info = lizard.analyze_file(str(p))
+        except Exception:  # noqa: BLE001
+            continue
+        rel = str(p.relative_to(root)) if p.is_relative_to(root) else str(p)
+        for fn in info.function_list:
+            out.append((rel, {"name": fn.name, "lineno": fn.start_line,
+                              "endline": fn.end_line, "complexity": fn.cyclomatic_complexity}))
+    return out
+
+
+def _complexity_blocks(files: list[Path], root: Path) -> list[tuple[str, dict]]:
+    return _radon_blocks(files, root) + _lizard_blocks(files, root)
+
+
+def _check_complexity(files: list[Path], root: Path, max_cc: int, max_fn: int) -> list[str]:
     errs = []
-    for rel, b in _radon_blocks(files, root):
+    for rel, b in _complexity_blocks(files, root):
         loc, name = f"{rel}:{b.get('lineno')}", b.get("name")
         cc = b.get("complexity", 0)
         if cc > max_cc:
@@ -111,6 +138,17 @@ def _check_python_complexity(files: list[Path], root: Path, max_cc: int, max_fn:
     return errs
 
 
+def hotspots(root: Path, base: str = "HEAD", limit: int = 15) -> str:
+    """Compact, highest-complexity-first summary of functions in the changed files
+    — fed to the reviewer so it scrutinises the gnarly code, not just the diff."""
+    files = _changed_source_files(root, base)
+    blocks = sorted(_complexity_blocks(files, root),
+                    key=lambda rb: rb[1].get("complexity", 0), reverse=True)
+    lines = [f"{rel}:{b.get('lineno')} {b.get('name')} — CC {b.get('complexity')}"
+             for rel, b in blocks[:limit] if b.get("complexity", 0) >= 6]
+    return "\n".join(lines)
+
+
 def check_limits(root: Path) -> tuple[bool, list[str]]:
     """Returns (passed, errors). Empty/clean when no changed source files."""
     files = _changed_source_files(root)
@@ -118,7 +156,7 @@ def check_limits(root: Path) -> tuple[bool, list[str]]:
         return True, []
     t = _load_thresholds(root)
     errs = _check_file_lines(files, root, t["max_file_lines"])
-    errs += _check_python_complexity(files, root, t["max_complexity"], t["max_function_lines"])
+    errs += _check_complexity(files, root, t["max_complexity"], t["max_function_lines"])
     if errs:
         return False, [f"limits[{len(errs)}]:\n" + "\n".join(f"  • {e}" for e in errs)]
     return True, []

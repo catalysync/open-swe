@@ -7,6 +7,7 @@ one verdict. Concurrent so latency stays ~1x.
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
@@ -14,6 +15,7 @@ from langchain_core.runnables import RunnableConfig
 from . import prompts
 from .claude import claude_text
 from .contracts import ReviewResult, parse_or_repair
+from .limits import hotspots
 from .projects import project_root
 from .state import HarnessState
 
@@ -63,9 +65,15 @@ def _body(label: str, r: ReviewResult) -> AIMessage:
 
 
 def quality_reviewer_node(state: HarnessState, config: RunnableConfig) -> dict:
-    diff = _diff(project_root(state, config), state.get("base_ref", "HEAD"))
+    root = project_root(state, config)
+    base = state.get("base_ref", "HEAD")
+    diff = _diff(root, base)
     if not diff.strip():
         return {"review_quality": ReviewResult(status="APPROVED").model_dump()}
+    hot = hotspots(Path(root), base)
+    if hot:
+        diff = (f"{diff}\n\n# Complexity hotspots (radon/lizard) in the changed files — "
+                "scrutinise these functions for over-complex branching the diff hides:\n" + hot)
     r = _review(prompts.QUALITY_REVIEWER, state.get("task", ""), diff, _dev_trace(state))
     return {"review_quality": r.model_dump(), "messages": [_body("🔍 Quality:", r)]}
 

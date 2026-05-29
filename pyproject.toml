@@ -28,6 +28,7 @@ dependencies = [
     "exa-py>=2.12.1",
     "langchain-google-genai>=4.2.2",
     "radon>=6.0.1",
+    "lizard>=1.22.2",
 ]
 
 [project.optional-dependencies]
