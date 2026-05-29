@@ -377,6 +377,13 @@ async def get_mine(config: RunnableConfig) -> Pregel:
     return build_mine_graph().with_config(config)
 
 
+async def get_hunt(config: RunnableConfig) -> Pregel:
+    """Bug-hunt harness — mine bugs + coverage gaps, fix each on a sequenced PR."""
+    from .harness.hunt import build_hunt_graph
+    config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
+    return build_hunt_graph().with_config(config)
+
+
 async def _get_agent_original(config: RunnableConfig) -> Pregel:
     """Original Deep Agents implementation (needs API key)."""
     thread_id = config["configurable"].get("thread_id", None)
