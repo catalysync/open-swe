@@ -39,6 +39,9 @@ Avoid the common AI-codegen pitfalls (any language):
 {manifest}
 - Match the project's existing architecture, error-handling, naming and logging
   conventions — don't introduce a foreign pattern.
+- NO AI/tool attribution anywhere — not in commit messages, PR titles, or PR
+  descriptions. Never add "Generated with Claude Code", a 🤖 line, or a
+  Co-Authored-By trailer. Write as the project's own engineer.
 
 When done, briefly summarize what you changed."""
 
