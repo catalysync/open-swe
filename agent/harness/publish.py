@@ -36,7 +36,10 @@ def _sh(args: list[str], root: str, *, token_unset: bool = False) -> tuple[bool,
 
 
 def _slug(task: str) -> str:
-    s = re.sub(r"[^a-z0-9]+", "-", task.lower()).strip("-")
+    # First non-empty line, stripped of any leaked message-envelope punctuation,
+    # then kebab-cased. Belt-and-suspenders even if task text is already clean.
+    first = next((ln for ln in task.splitlines() if ln.strip()), task)
+    s = re.sub(r"[^a-z0-9]+", "-", first.lower()).strip("-")
     return (s[:48] or "harness-change").rstrip("-")
 
 

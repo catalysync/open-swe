@@ -41,8 +41,21 @@ def curator_propose(state: HarnessState) -> dict:
         if getattr(m, "type", None) == "ai" and isinstance(m.content, str) and m.content.strip():
             summary = m.content[:200]
             break
-    append_memory(root, {"task": state.get("task", ""), "summary": summary,
-                         "stack": (state.get("validation") or {}).get("stack", "")})
+    # Durable audit record: did the review/validate loop actually catch+fix
+    # anything? retries>0 with findings = the harness improved the code; 0 =
+    # approved first pass. Without this the question is unanswerable after the run.
+    review = state.get("review") or {}
+    validation = state.get("validation") or {}
+    append_memory(root, {
+        "task": state.get("task", ""),
+        "summary": summary,
+        "stack": validation.get("stack", ""),
+        "retries": state.get("retry_count", 0),
+        "review_status": review.get("status"),
+        "review_severity": review.get("severity"),
+        "findings": review.get("findings", []),
+        "gate_passed": validation.get("passed"),
+    })
 
     if not diff.strip():
         return {"proposal": None}

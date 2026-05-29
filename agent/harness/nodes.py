@@ -24,6 +24,7 @@ from .projects import (
 )
 from .retrieve import pre_hydrate
 from .state import HarnessState
+from .text import content_text
 from .validator import run_gate
 
 MAX_RETRIES = 3  # ADR 0006/0012: escalate after 3 retries
@@ -58,10 +59,8 @@ def _touched(root: str, base: str = "HEAD") -> list[str]:
 
 def _task_from_messages(state: HarnessState) -> str:
     for msg in state["messages"]:
-        if isinstance(msg, HumanMessage):
-            return msg.content if isinstance(msg.content, str) else str(msg.content)
-        if getattr(msg, "type", None) == "human":
-            return msg.content if isinstance(msg.content, str) else str(msg.content)
+        if isinstance(msg, HumanMessage) or getattr(msg, "type", None) == "human":
+            return content_text(msg.content)
     return ""
 
 
