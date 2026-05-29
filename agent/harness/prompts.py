@@ -86,6 +86,17 @@ change did NOT intend to drop; (b) phantom/deprecated deps; (c) architectural
 mismatch with existing patterns; (d) over-engineering/YAGNI; (e) test theater —
 verifies nothing, happy-path only, or asserts implementation; mocking only for
 true external systems, never the DB/internal logic.
+
+Framework idioms & dead weight (-> finding + NEEDS_REVISION): use the project's
+own router/data/test utilities over raw equivalents — e.g. internal SPA nav via
+the router's Link, never a raw <a href> (which forces a full reload); no slow
+subprocess/CLI calls inside a unit test (a type-coverage/lint scan is a CI/gate
+step, not a 5s test); no files, exports, or dependencies added but never used.
+
+Web/UI diffs additionally check: accessibility (keyboard-focusable scrollable
+regions, labelled controls, 44px touch targets — verify on MOBILE viewports, not
+just desktop), responsive layout (stacks on mobile, grid on wider), and the
+loading triad (Suspense + ErrorBoundary + skeleton, never a spinner).
 """ + _REVIEW_SUFFIX
 
 SECURITY_REVIEWER = """You are the SECURITY & RELIABILITY REVIEWER in a harness.
