@@ -367,7 +367,10 @@ async def get_agent(config: RunnableConfig) -> Pregel:
     """Main harness — supervisor-pipeline of claude -p nodes (ADR 0001/0005)."""
     from .harness.graph import build_harness_graph
     config["recursion_limit"] = DEFAULT_RECURSION_LIMIT
-    return build_harness_graph().with_config(config)
+    # Server runs unattended (Studio/webhooks): no HITL pause at curator_apply,
+    # so a proposed skill template auto-applies and the run reaches END. The
+    # CLI keeps --hitl for interactive approval.
+    return build_harness_graph(hitl=False).with_config(config)
 
 
 async def get_mine(config: RunnableConfig) -> Pregel:
